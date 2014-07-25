@@ -1,0 +1,38 @@
+Proposed ncmplr pipeline for static time analysis:
+1. Expand macros; also, funcall+lambda => let if needed.
+1a. Optimizations could go here -- CSE/remat, etc.
+1b. Maybe delay-let that expands back into funcall+lambda, because if.
+2. CPS for timed regions, as follows:
+2a. For each user lambda, add an explicit continuation arg and:
+2b. For each least-tail-position, funcall the continuation, except:
+  No: (funcall k0 (+ (funcall foo x) (funcall bar y)))
+  Yes: (funcall foo x (lambda (g0) (funcall bar y (lambda (g1) (funcall k0 (+ g0 g1))))))
+  No: (funcall k0 (funcall foo x y))
+  Also no: (funcall foo x y (lambda (g0) (k0 g0)))
+  Yes: (funcall foo x y k0)
+  (Or maybe put the continuations first.  Whatever.)
+3. Actual codegen, where, for timed regions:
+3a. Top-level lambda body => LDF 1f; LDC cost(B); RTN; 1: [[B]]
+3b. There are no non-tail insns.  (Maybe JOIN; I think it's safe, but suboptimal.)
+3c. `yield` is LDC 0; the ur-continuation is that pointing to the start.
+3d. call/cc can also happen here, but do I care?
+4. Runtime for (worker B):
+4a. Time-translate (funcall (lambda (yield k0) B) ...) or something.  Save those two.
+4b. Trampoline: LD time-left, LD time-needed, SUB, ST time-left,
+      LD time-left, LDC 0, CLT, SEL for timeout,
+      AP 0, ST time-needed, LD time-needed, SEL for yield; loop.
+4b'. So it's 14-15 cycles per bounce, even with ST.  That's maybe kind of painful?
+
+
+Dynamic timing idea:
+* If you run out of time, you're unwound; no magic CPS; save state manually.
+* Can waste work; can spill over.  So Don't Do That.
+* At potential join point: LD time-left; LDC time-used; SUB; ST time-left
+** Pessimize ifs if the delta isn't more than that.  Maybe even if it is.  Or tail-clone.
+* To check: LD time-left; LDC 0; CLT; TSEL landing-pad next-insn
+** Needed in loops and directly after non-tail call sites.
+
+
+Remaining thoughts:
+* I still like explicit "funcall".
+* Could warn for non-tail funcall to suggest CPS or APS.
