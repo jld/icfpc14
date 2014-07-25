@@ -105,11 +105,13 @@
        (emit 'ap (length (cdr exp))))))
    (else (error "unhandled expression:" exp))))
 
+(define (insn-fmt op args)
+  (apply string-append (string-upcase (symbol->string op))
+	 (map (lambda (arg) (format " ~a" arg)) args)))
+
 (define (simple-emit (pfx 'main))
   (lambda (op . args)
     (case op
      ((_fork) (simple-emit (gensym)))
      ((_get) pfx)
-     (else (printf "~a << ~a~a~n" pfx
-		   (string-upcase (symbol->string op))
-		   (apply string-append (map (lambda (arg) (format " ~a" arg)) args)))))))
+     (else (printf "~a << ~a~n" pfx (insn-fmt op args))))))
