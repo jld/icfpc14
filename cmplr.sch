@@ -1,6 +1,6 @@
 (define (cmplr emit env exp)
   (define (recur exp) (cmplr emit env exp))
-  (define (recur-enter frame exp) (cmplr emit (cons frame env) exp))
+
   (define (do-binop op exps)
     (recur (car exps))
     (for ((exp (in-list (cdr exps))))
@@ -54,6 +54,26 @@
 	 (error "wrong arity for unary operator:" exp)
 	 (recur (cadr exp))
 	 (emit (car exp))))
+      ((if)
+       (unless (= (length exp) 4)
+	 (error "wrong arity for conditional:" exp))
+       (let ((conseq (emit '_fork))
+	     (altern (emit '_fork)))
+	 (recur (cadr exp))
+	 (emit 'sel (conseq '_get) (altern '_get))
+	 (cmplr conseq env (caddr exp))
+	 (conseq 'join)
+	 (cmplr altern env (cadddr exp))
+	 (altern 'join)))
       ;; TODO
       (else (error "unknown operator:" exp))))
    (else (error "unhandled expression:" exp))))
+
+(define (simple-emit (pfx 'main))
+  (lambda (op . args)
+    (case op
+     ((_fork) (simple-emit (gensym)))
+     ((_get) pfx)
+     (else (printf "~a << ~a~a~n" pfx
+		   (string-upcase (symbol->string op))
+		   (apply string-append (map (lambda (arg) (format " ~a" arg)) args)))))))
