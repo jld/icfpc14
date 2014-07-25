@@ -1,5 +1,6 @@
-(define (cmplr emit env exp)
-  (define (recur exp) (cmplr emit env exp))
+(define (cmplr emit env exp tail)
+  (define (recur exp) (cmplr emit env exp #f))
+  (define (used-tail) (set! tail #f))
 
   (define (do-binop op exps)
     (recur (car exps))
@@ -60,11 +61,16 @@
        (let ((>then (emit '_fork))
 	     (>else (emit '_fork)))
 	 (recur (cadr exp))
-	 (emit 'sel (>then '_get) (>else '_get))
-	 (cmplr >then env (caddr exp))
-	 (>then 'join)
-	 (cmplr >else env (cadddr exp))
-	 (>else 'join)))
+	 (if (symbol? tail)
+	     (begin
+	       (emit 'tsel (>then '_get) (>else '_get))
+	       (cmplr >then env (caddr exp) tail)
+	       (cmplr >else env (cadddr exp) tail)
+	       (used-tail))
+	     (begin
+	       (emit 'sel (>then '_get) (>else '_get))
+	       (cmplr >then env (caddr exp) 'join)
+	       (cmplr >else env (cadddr exp) 'join)))))
       ((lambda)
        (unless (and (list? (cadr exp)) (andmap symbol? (cadr exp)))
 	 (error "unsupported argument list:" exp))
@@ -72,8 +78,7 @@
 	 (error "no begin (yet):" exp))
        (let ((>body (emit '_fork)))
 	 (emit 'ldf (>body '_get))
-	 (cmplr >body (cons (cadr exp) env) (caddr exp))
-	 (>body 'rtn)))
+	 (cmplr >body (cons (cadr exp) env) (caddr exp) 'rtn)))
       ((letrec)
        (unless (and (= (length exp) 3) (andmap (lambda (b) (= (length b) 2)) (cadr exp)))
 	 (error "no begin (yet):" exp))
@@ -81,9 +86,13 @@
 	     (inits (map cadr (cadr exp)))
 	     (body (caddr exp)))
 	 (emit 'dum (length vars))
-	 (for-each (lambda (init) (cmplr emit (cons vars env) init)) inits)
+	 (for-each (lambda (init) (cmplr emit (cons vars env) init #f)) inits)
 	 (recur `(lambda ,vars ,body))
-	 (emit 'rap (length vars))))
+	 (if (eq? tail 'rtn)
+	     (begin
+	       (emit 'trap (length vars))
+	       (used-tail))
+	     (emit 'rap (length vars)))))
 
       ;; fake macros
       ((let)
@@ -100,10 +109,17 @@
       ;; It must be a function.
       (else
        ;; Yes, this means all the primitive names are PL/I-style semi-reserved words.
+       ;; Also, primitives have to be eta-expanded to use as values.  Oops.
        (for-each recur (cdr exp))
        (recur (car exp))
-       (emit 'ap (length (cdr exp))))))
-   (else (error "unhandled expression:" exp))))
+       (if (eq? tail 'rtn)
+	   (begin
+	     (emit 'tap (length (cdr exp)))
+	     (used-tail))
+	   (emit 'ap (length (cdr exp)))))))
+   (else (error "unhandled expression:" exp)))
+  (when (symbol? tail)
+    (emit 'tail)))
 
 (define (insn-fmt op args)
   (apply string-append (string-upcase (symbol->string op))
