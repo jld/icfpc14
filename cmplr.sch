@@ -74,7 +74,16 @@
 	 (emit 'ldf (>body '_get))
 	 (cmplr >body (cons (cadr exp) env) (caddr exp))
 	 (>body 'rtn)))
-      ;; TODO
+      ((letrec)
+       (unless (and (= (length exp) 3) (andmap (lambda (b) (= (length b) 2)) (cadr exp)))
+	 (error "no begin (yet):" exp))
+       (let ((vars (map car (cadr exp)))
+	     (inits (map cadr (cadr exp)))
+	     (body (caddr exp)))
+	 (emit 'dum (length vars))
+	 (for-each (lambda (init) (cmplr emit (cons vars env) init)) inits)
+	 (recur `(lambda ,vars ,body))
+	 (emit 'rap (length vars))))
 
       ;; fake macros
       ((let)
