@@ -10,7 +10,7 @@
   (let ((acc '()))
     (let loop ((block main))
       (set! acc (cons block acc))
-      (for-each loop (block-children block)))
+      (for-each loop (reverse (block-children block))))
     (reverse acc)))
 
 (define (block-layout! main)
