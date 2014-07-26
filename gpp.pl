@@ -28,14 +28,17 @@ while(<>) {
     push @lines, [$opcode, @args, $comment];
     ++$pc if defined $opcode;
 }
+$.=0;
 for my $line (@lines) {
+    ++$.;
     my ($opcode, @args) = @$line;
     my $comment = pop @args;
     for my $i (0..$#args) {
-	if ($args[$i] =~ /^\w+$/ && $args[$i] !~ /^\d+$/ && ($args[$i] !~ /^(?:[a-h]|pc)$/i)) {
+	if ($args[$i] =~ /^\w+$/ && $args[$i] !~ /^\d+$/ && $args[$i] !~ /^(?:[a-h]|pc)$/i) {
 	    # Labels allowed as immediates, in case of operations on PC or saved PC values.
 	    # Labels not yet allowed as data addresses.
 	    my $label = $args[$i];
+	    die "Undefined label \"$label\"" unless exists $labels{$label};
 	    my $addr = $labels{$label};
 	    $comment = defined $comment ? " $comment" : "";
 	    $comment = "[$addr->$label]$comment";
