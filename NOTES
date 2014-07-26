@@ -40,3 +40,22 @@ Remaining thoughts:
 But wait:
 * Can I use STOP for non-local return?  Will it overflow the control stack?  Or...?
 * Still need to track time and watch for exhaustion; just saves unwind from recursion.
+
+
+Okay, *new* new idea:
+* Complete worst-case time analysis -> "loop (at most) n cycles".
+* Add tagged lambda/funcall and "loop (at most) n times"; take away letrec and general lambda
+** Or allow letrec but not if it's used for recursion.
+** Could use magic numbers to assert tagged property upheld.
+* (Compiling down to this from a Java-like HLL optional.  But could be entertaining.)
+* Could do this syntactically (with lambda-tag context) or folded into compiler.
+** i.e., for each block, compute the worst-case time from entering it to control stack pop,
+   as they're built.  Because this is where we know exactly how many insns there are.
+* Some dynamic scheduling would be nice, though....
+
+But first:
+* Rename funcall already.
+* Add set! and for-effect and begin and probably general values/cwv.
+** Oh hey: can use those tags to enforce arity matching.
+* Maybe implement my own interpreter if/when it seems like less work than not.
+* Actually implement the object-oriented thing that made the latest analysis idea seem justified.
