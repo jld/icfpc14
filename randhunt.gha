@@ -1,0 +1,73 @@
+	jeq rc4ini, a, 0
+	; Lambda-Man 1 -> c, d
+where:	int 1
+	mov c, a
+	mov d, b
+	; Self position -> a, b
+	int 3
+	int 5
+	; Proceed by cases...
+	mov e, 4
+	; If left, reflect x.  |dx| -> c
+	jgt right, c, a
+left:	add e, 1
+	xor a, c
+	xor c, a
+	xor a, c
+right:	sub c, a
+	; If down, reflect y.  |dy| -> b
+	jlt up, d, b
+down:	add e, 2
+	xor b, d
+	xor d, b
+	xor b, d
+up:	sub b, d
+	; up/down octants vs. left/right.  max(|dx|,|dy|) -> b
+	jgt updn, b, c
+lfrt:	mov b, c
+	; BIT HAX AHOY:
+	mul e, 2
+	; e&8 = left or right; e&2 = down or left
+updn:   mov a, e
+	div e, 8
+	and a, 2
+	or e, a
+	; At last, e points toward Lambda-Man.
+	; Now randomly mess things up if we're far away.
+	mov a, [g]
+	add a, [h]
+	mul b, 12
+	jlt flop, b, a
+	xor e, a
+	; Change directions if not normal.
+flop:	int 3
+	int 6
+	mul a, b
+	add a, e
+poke:	and a, 3
+	int 0
+	mov c, 0
+rc4run:	int 3
+	xor a, c
+	inc c
+	int 5
+	; Step KSA with a.
+	add h, [g]
+	add h, a
+	xor [g], [h]
+	xor [h], [g]
+	xor [g], [h]
+	inc g
+	; Step KDA with b
+	add h, [g]
+	add h, b
+	xor [g], [h]
+	xor [h], [g]
+	xor [g], [h]
+	inc g
+	; Endless loop.
+	mov pc, rc4run
+rc4ini:	inc a
+	mov [a], a
+	jlt rc4ini, a, 255
+	mov pc, where
