@@ -25,8 +25,8 @@ for($s=0; $s<=$#lines; ++$s) {
 
 sub resolv { (ref $_[0])?resolv(${$_[0]}):$_[0] }
 
-print map { ++$n; ($_,$s)=@$_; s/(?<!\S)\.(?!\S)/$n/g;
-	    s/(?<!\S)\.(\S+)/(exists $labl{$1})?resolv($labl{$1})
+print map { ++$n; ($_,$s)=@$_;
+	    s/([a-zA-Z_][a-zA-Z_0-9]+)/!$-[1]?$1:(exists $labl{$1})?resolv($labl{$1})
 	    :((warn "Undefined label \"$1\" on input line $s!\n"),$n)/ge;
 	    $_ } @plines;
 
