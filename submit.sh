@@ -4,7 +4,7 @@ lman=$1
 tmpdir=$(mktemp -dt icfpc14.XXXXXXXXXX)
 final=${2:-submission.tgz}
 mkdir "$tmpdir/solution" "$tmpdir/code"
-cp "$lman" "$tmpdir/solution"
+cp "$lman" "$tmpdir/solution/lambdaman.gcc"
 git ls-tree -r --name-only HEAD | cpio -pdmv "$tmpdir/code"
 tar -zf "$final" -C "$tmpdir" -vc code solution
 rm -r "$tmpdir"
