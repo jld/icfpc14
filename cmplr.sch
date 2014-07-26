@@ -116,11 +116,12 @@
 	   ((>=) (recur lhs) (recur rhs) (emit 'cgte))
 	   ((<=) (recur rhs) (recur lhs) (emit 'cgte))
 	   ((cons) (recur lhs) (recur rhs) (emit 'cons)))))
-      ((atom car cdr)
+      ((atom? car cdr)
        (unless (= (length exp) 2)
 	 (error "wrong arity for unary operator:" exp))
        (recur (cadr exp))
-       (emit (car exp)))
+       (let ((op (car exp)))
+	 (emit (if (eq? op 'atom?) 'atom op))))
 
       ((if)
        (unless (= (length exp) 4)
@@ -145,7 +146,7 @@
 	 (error "unsupported argument list:" exp))
        (let ((>body (block-fork block)))
 	 (emit 'ldf >body)
-	 (cmplr >body (cons (cadr exp) env) (cons 'begin (cddr exp)) 'rtn)))
+	 (cmplr >body (cons (cadr exp) env) `(begin ,@(cddr exp)) 'rtn)))
       ((funcall)
        (for-each recur (cddr exp))
        (recur (cadr exp))
@@ -183,7 +184,7 @@
 	  ((and (pair? (car stmts)) ; Trim leading syntactically-for-effect stmts.
 		(memq (caar stmts) '(set! debug break)))
 	   (cmplr block env (car stmts) 'drop)
-	   (recur/tail (cons 'begin (cdr stmts))))
+	   (recur/tail `(begin ,@(cdr stmts))))
 	  ; And this is the wasted value case.
 	  (else
 	   (recur/tail `(let ((,(gensym) ,(car stmts)))
@@ -217,8 +218,21 @@
       ((let*)
        (if (null? (cadr exp)) (recur (caddr exp))
 	   (recur/tail `(let (,(caadr exp)) (let* ,(cdadr exp) ,@(cddr exp))))))
+      ((cond)
+       (cond
+	((null? (cdr exp))
+	 (for-effect!))
+	((eq? (caadr exp) 'else)
+	 ;; It's a little unhygienic to treat else like that.
+	 ;; But I *know* if I require #t I'll get it wrong & be annoyed.
+	 (recur/tail `(begin ,@(cdadr exp))))
+	(else (recur/tail `(if ,(caadr exp)
+			       (begin ,@(cdadr exp))
+			       (cond ,@(cddr exp)))))))
+
       ((not)
        (recur/tail `(= 0 ,@(cdr exp))))
+      ; Would be nice to be able to define pair? to be expanded *before* the if-not hack.
 
       (else (error "unhandled operator:" exp))))
    (else (error "unhandled expression:" exp)))
