@@ -66,6 +66,13 @@ rc4run:	int 3
 	xor [g], [h]
 	inc g
 	; Endless loop.
+	;
+	; Note: It's possible to be interrupted in the middle of one of
+	; those swap idioms; I haven't done the cycle-counting but there's
+	; probably a case where it happens, so the sbox's permutation-ness
+	; will decay over time.  Given that the goal of this thing is just
+	; to get vaguely random-ish bits and annoy slow interpreters, I'm
+	; not sure it matters.
 	mov pc, rc4run
 rc4ini:	inc a
 	mov [a], a
