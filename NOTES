@@ -36,3 +36,7 @@ Dynamic timing idea:
 Remaining thoughts:
 * I still like explicit "funcall".
 * Could warn for non-tail funcall to suggest CPS or APS.
+
+But wait:
+* Can I use STOP for non-local return?  Will it overflow the control stack?  Or...?
+* Still need to track time and watch for exhaustion; just saves unwind from recursion.
