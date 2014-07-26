@@ -14,16 +14,16 @@ left:	add e, 1
 	xor c, a
 	xor a, c
 right:	sub c, a
-	; If down, reflect y.  |dy| -> d
+	; If down, reflect y.  |dy| -> b
 	jlt up, d, b
 down:	add e, 2
 	xor b, d
 	xor d, b
 	xor b, d
-up:	sub d, b
-	; up/down octants vs. left/right.  max(|dx|,|dy|) -> d
-	jgt updn, d, c
-lfrt:	mov d, c
+up:	sub b, d
+	; up/down octants vs. left/right.  max(|dx|,|dy|) -> b
+	jgt updn, b, c
+lfrt:	mov b, c
 	; BIT HAX AHOY:
 	mul e, 2
 	; e&8 = left or right; e&2 = down or left
