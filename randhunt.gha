@@ -58,7 +58,7 @@ rc4run:	int 3
 	xor [h], [g]
 	xor [g], [h]
 	inc g
-	; Step KDA with b
+	; Step KSA with b
 	add h, [g]
 	add h, b
 	xor [g], [h]
