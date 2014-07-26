@@ -56,7 +56,24 @@
 (define (cmplr block env exp tail)
   (define (emit . args) (apply block-emit block args))
   (define (recur exp) (cmplr block env exp #f))
-  (define (used-tail) (set! tail #f))
+  (define (tail-used!) (set! tail #f))
+  (define (recur/tail exp)
+    (cmplr block env exp tail)
+    (tail-used!))
+  (define (for-effect!)
+    (if (eq? tail 'drop)
+	(tail-used!)
+	(emit 'ldc 0)))
+
+  (define (do-envop ldst sym)
+    (let floop ((env env) (n 0))
+      (when (null? env)
+	(error "unbound variable:" sym))
+      (let vloop ((frame (car env)) (i 0))
+	(cond
+	 ((null? frame) (floop (cdr env) (+ n 1)))
+	 ((eq? (car frame) sym) (emit ldst n i))
+	 (else (vloop (cdr frame) (+ i 1)))))))
 
   (define (do-binop op exps)
     (recur (car exps))
@@ -79,15 +96,8 @@
 
   (cond
    ((integer? exp) (emit 'ldc exp))
-   ((symbol? exp)
-    (let floop ((env env) (n 0))
-      (when (null? env)
-	(error "unbound variable:" exp))
-      (let vloop ((frame (car env)) (i 0))
-	(cond
-	 ((null? frame) (floop (cdr env) (+ n 1)))
-	 ((eq? (car frame) exp) (emit 'ld n i))
-	 (else (vloop (cdr frame) (+ i 1)))))))
+   ((symbol? exp) (do-envop 'ld exp))
+
    ((cons? exp)
     (case (car exp)
       ((+) (do-addmul 'add 0 (cdr exp)))
@@ -111,18 +121,19 @@
 	 (error "wrong arity for unary operator:" exp))
        (recur (cadr exp))
        (emit (car exp)))
+
       ((if)
        (unless (= (length exp) 4)
 	 (error "wrong arity for conditional:" exp))
        (let ((>then (block-fork block))
 	     (>else (block-fork block)))
 	 (recur (cadr exp))
-	 (if (symbol? tail)
+	 (if tail
 	     (begin
 	       (emit 'tsel >then >else)
 	       (cmplr >then env (caddr exp) tail)
 	       (cmplr >else env (cadddr exp) tail)
-	       (used-tail))
+	       (tail-used!))
 	     (begin
 	       (emit 'sel >then >else)
 	       (cmplr >then env (caddr exp) 'join)
@@ -135,6 +146,14 @@
        (let ((>body (block-fork block)))
 	 (emit 'ldf >body)
 	 (cmplr >body (cons (cadr exp) env) (caddr exp) 'rtn)))
+      ((funcall)
+       (for-each recur (cddr exp))
+       (recur (cadr exp))
+       (if (eq? tail 'rtn)
+	   (begin
+	     (emit 'tap (length (cddr exp)))
+	     (tail-used!))
+	   (emit 'ap (length (cddr exp)))))
       ((letrec)
        (unless (and (= (length exp) 3) (andmap (lambda (b) (= (length b) 2)) (cadr exp)))
 	 (error "no begin (yet):" exp))
@@ -147,8 +166,43 @@
 	 (if (eq? tail 'rtn)
 	     (begin
 	       (emit 'trap (length vars))
-	       (used-tail))
+	       (tail-used!))
 	     (emit 'rap (length vars)))))
+
+      ((begin)
+       (let ((stmts (cdr exp)))
+	 (cond
+	  ((null? stmts)
+	   (error "begin: empty form not allowed"))
+	  ((and (pair? (car stmts)) ; Splicing begin.
+		(eq? (caar stmts) 'begin))
+	   (recur/tail `(begin ,@(cdar stmts) ,@(cdr stmts))))
+	  ((null? (cdr stmts)) ; Unary begin.
+	   (recur/tail (car stmts)))
+	  ((and (pair? (car stmts)) ; Trim leading syntactically-for-effect stmts.
+		(memq (caar stmts) '(set! debug break)))
+	   (cmplr block env (car stmts) 'drop)
+	   (recur/tail (cons 'begin (cdr stmts))))
+	  ; And this is the wasted value case.
+	  (else
+	   (recur/tail `(let ((,(gensym) ,(car stmts)))
+			  (begin ,@(cdr stmts))))))))
+
+      ((set!)
+       (unless (= (length exp) 3)
+	 (error "wrong arity for set!:" exp))
+       (recur (caddr exp))
+       (do-envop 'st (cadr exp))
+       (for-effect!))
+
+      ((debug)
+       (for ((arg (in-list (cdr exp))))
+	 (recur arg)
+	 (emit 'dbug)
+	 (for-effect!)))
+      ((break)
+       (emit 'break)
+       (for-effect!))
 
       ;; fake macros
       ((let)
@@ -157,25 +211,13 @@
        (let ((vars (map car (cadr exp)))
 	     (inits (map cadr (cadr exp)))
 	     (body (caddr exp)))
-	 (recur `(funcall (lambda ,vars ,body) ,@inits))))
+	 (recur/tail `(funcall (lambda ,vars ,body) ,@inits))))
       ((let*)
        (if (null? (cadr exp)) (recur (caddr exp))
-	   (recur `(let (,(caadr exp)) (let* ,(cdadr exp) ,@(cddr exp))))))
+	   (recur/tail `(let (,(caadr exp)) (let* ,(cdadr exp) ,@(cddr exp))))))
 
-      ((with-debug)
-       (recur (cadr exp))
-       (emit 'dbug)
-       (recur (caddr exp)))
-
-      ((funcall)
-       (for-each recur (cddr exp))
-       (recur (cadr exp))
-       (if (eq? tail 'rtn)
-	   (begin
-	     (emit 'tap (length (cddr exp)))
-	     (used-tail))
-	   (emit 'ap (length (cddr exp)))))
       (else (error "unhandled operator:" exp))))
    (else (error "unhandled expression:" exp)))
-  (when (symbol? tail)
-    (emit tail)))
+  (cond
+   ((eq? tail 'drop) (error "internal error: unexpected drop context in" exp))
+   ((symbol? tail) (emit tail))))
