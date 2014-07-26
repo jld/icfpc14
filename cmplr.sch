@@ -39,7 +39,7 @@
 
 (define (cmplr/prog exp (with-labels #f))
   (let ((main (new-block)))
-    (cmplr main '(initial-world undocumented) exp 'rtn)
+    (cmplr main '((initial-world undocumented)) exp 'rtn)
     (for-each display (block->strings main with-labels))))
 
 (define (cmplr block env exp tail)
@@ -70,8 +70,8 @@
    ((integer? exp) (emit 'ldc exp))
    ((symbol? exp)
     (let floop ((env env) (n 0))
-      (when (null? env) 
-	    (error "unbound variable:" exp))
+      (when (null? env)
+	(error "unbound variable:" exp))
       (let vloop ((frame (car env)) (i 0))
 	(cond
 	 ((null? frame) (floop (cdr env) (+ n 1)))
@@ -97,9 +97,9 @@
 	   ((cons) (recur lhs) (recur rhs) (emit 'cons)))))
       ((atom car cdr)
        (unless (= (length exp) 2)
-	 (error "wrong arity for unary operator:" exp)
-	 (recur (cadr exp))
-	 (emit (car exp))))
+	 (error "wrong arity for unary operator:" exp))
+       (recur (cadr exp))
+       (emit (car exp)))
       ((if)
        (unless (= (length exp) 4)
 	 (error "wrong arity for conditional:" exp))
@@ -150,6 +150,11 @@
       ((let*)
        (if (null? (cadr exp)) (recur (caddr exp))
 	   (recur `(let (,(caadr exp)) (let* ,(cdadr exp) ,@(cddr exp))))))
+
+      ((with-debug)
+       (recur (cadr exp))
+       (emit 'dbug)
+       (recur (caddr exp)))
 
       ;; It must be a function.
       (else

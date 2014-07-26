@@ -3,3 +3,18 @@
 	      (cons (+ 12345 (* s 1103515245))
 		    (if (< s 0) (- 3 (/ s ,(- (expt 2 30)))) 
 			(/ s ,(expt 2 30)))))))
+(define faceplant
+  `(letrec ((nth (lambda (n l) (if n (nth (- n 1) (cdr l)) (car l)))))
+     (cons 0
+      (lambda (s w)
+	(let ((wmap (car w))
+	      (here (car (cdr (car (cdr w))))))
+	  (let ((x (car here))
+		(y (cdr here)))
+	    (letrec ((try (lambda (s)
+				(let ((dx (if (= s 1) 1 (if (= s 3) -1 0)))
+				      (dy (if (= s 2) 1 (if (= s 0) -1 0))))
+				  (if (nth (+ x dx) (nth (+ y dy) wmap))
+				      (cons s s)
+				      (try (if (= s 3) 0 (+ s 1))))))))
+	      (try s))))))))
