@@ -42,10 +42,16 @@
     (cmplr main '((initial-world undocumented)) exp 'rtn)
     (for-each display (block->strings main with-labels))))
 
+;; FIXME: this should unwind-protect (or whatever) the open file.
 (define (cmplr/xclip exp)
   (let ((xclip (cadr (process "xclip -i"))))
     (parameterize ((current-output-port xclip)) (cmplr/prog exp))
     (close-output-port xclip)))
+
+(define (cmplr/file fn exp)
+  (with-output-to-file fn 
+    (lambda () (cmplr/prog exp))
+    #:exists 'replace))
 
 (define (cmplr block env exp tail)
   (define (emit . args) (apply block-emit block args))
