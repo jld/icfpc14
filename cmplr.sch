@@ -196,12 +196,12 @@
        (do-envop 'st (cadr exp))
        (for-effect!))
 
-      ((debug)
+      ((debug!)
        (for ((arg (in-list (cdr exp))))
 	 (recur arg)
 	 (emit 'dbug)
 	 (for-effect!)))
-      ((break)
+      ((break!)
        (emit 'break)
        (for-effect!))
 

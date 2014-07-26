@@ -54,7 +54,18 @@ Okay, *new* new idea:
 * Some dynamic scheduling would be nice, though....
 
 But first:
-* Add set! and for-effect and begin and probably general values/cwv.
-** Oh hey: can use those tags to enforce arity matching.
 * Maybe implement my own interpreter if/when it seems like less work than not.
-* Actually implement the object-oriented thing that made the latest analysis idea seem justified.
+* Actually implement the Lambda-Man AI idea that made the latest analysis idea seem justified.
+
+Thoughts on the second-day twist:
+* A straightforward interpreter is possible.
+* The huge program size would let me, say, write all 8x car/cdr chains and use closures to them.
+* (Or other ridiculous things along those lines.)
+* But it's not actually useful until/unless it would actually help to predict the ghosts.
+* HOWEVER.  Adding computationally difficult chaff to my ghost program may be called for.
+** Bang on memory like a crazed weasel, register indirect.  That'll add up over time.
+** Also, bitwise ops.  Lambda-Man doesn't have them.
+** So... RC4 with the triple-xor idiom for swaps?
+*** Yeah, someone could idiom-recognize it... but I bet they won't.
+** Doing the occasional computed goto (that doesn't actually matter) would be a nice touch.
+* Note that running out of cycles is equivalent to HALT, unlike for LMan.
