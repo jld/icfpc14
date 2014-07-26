@@ -1,0 +1,35 @@
+where:	int 1
+	mov c, a
+	mov d, b
+	int 3
+	int 5
+	mov e, 0
+	jgt right, c, a
+	add e, 2
+	xor a, c
+	xor c, a
+	xor a, c
+right:	sub c, a
+	jlt up, d, b
+	add e, 1
+	xor b, d
+	xor d, b
+	xor b, d
+up:	sub d, b
+	jgt ccw, d, b
+	mov d, b
+	add e, 1
+	and e, 3
+ccw:	int 3
+	mul a, 4
+	inc a
+	div d, a
+	add e, d
+	and e, 3
+	int 3
+	int 6
+	jeq poke, a, 0
+	xor e, 2
+poke:	mov a, e
+	int 0
+	hlt
