@@ -151,7 +151,7 @@
        (let ((vars (map car (cadr exp)))
 	     (inits (map cadr (cadr exp)))
 	     (body (caddr exp)))
-	 (recur `((lambda ,vars ,body) ,@inits))))
+	 (recur `(funcall (lambda ,vars ,body) ,@inits))))
       ((let*)
        (if (null? (cadr exp)) (recur (caddr exp))
 	   (recur `(let (,(caadr exp)) (let* ,(cdadr exp) ,@(cddr exp))))))
@@ -161,17 +161,15 @@
        (emit 'dbug)
        (recur (caddr exp)))
 
-      ;; It must be a function.
-      (else
-       ;; Yes, this means all the primitive names are PL/I-style semi-reserved words.
-       ;; Also, primitives have to be eta-expanded to use as values.  Oops.
-       (for-each recur (cdr exp))
-       (recur (car exp))
+      ((funcall)
+       (for-each recur (cddr exp))
+       (recur (cadr exp))
        (if (eq? tail 'rtn)
 	   (begin
-	     (emit 'tap (length (cdr exp)))
+	     (emit 'tap (length (cddr exp)))
 	     (used-tail))
-	   (emit 'ap (length (cdr exp)))))))
+	   (emit 'ap (length (cddr exp)))))
+      (else (error "unhandled operator:" exp))))
    (else (error "unhandled expression:" exp)))
   (when (symbol? tail)
     (emit tail)))

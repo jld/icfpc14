@@ -54,7 +54,6 @@ Okay, *new* new idea:
 * Some dynamic scheduling would be nice, though....
 
 But first:
-* Rename funcall already.
 * Add set! and for-effect and begin and probably general values/cwv.
 ** Oh hey: can use those tags to enforce arity matching.
 * Maybe implement my own interpreter if/when it seems like less work than not.
