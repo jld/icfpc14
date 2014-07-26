@@ -42,6 +42,11 @@
     (cmplr main '((initial-world undocumented)) exp 'rtn)
     (for-each display (block->strings main with-labels))))
 
+(define (cmplr/xclip exp)
+  (let ((xclip (cadr (process "xclip -i"))))
+    (parameterize ((current-output-port xclip)) (cmplr/prog exp))
+    (close-output-port xclip)))
+
 (define (cmplr block env exp tail)
   (define (emit . args) (apply block-emit block args))
   (define (recur exp) (cmplr block env exp #f))
@@ -54,7 +59,7 @@
       (emit op)))
   (define (do-addmul op unit exps)
     (if (null? exps) (emit 'ldc unit)
-	(do-binop 'add exps)))
+	(do-binop op exps)))
   (define (do-sub exps)
     (cond
      ((null? exps) (error "- needs arguments"))
