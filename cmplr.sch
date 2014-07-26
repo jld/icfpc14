@@ -125,19 +125,21 @@
       ((if)
        (unless (= (length exp) 4)
 	 (error "wrong arity for conditional:" exp))
-       (let ((>then (block-fork block))
-	     (>else (block-fork block)))
-	 (recur (cadr exp))
-	 (if tail
-	     (begin
-	       (emit 'tsel >then >else)
-	       (cmplr >then env (caddr exp) tail)
-	       (cmplr >else env (cadddr exp) tail)
-	       (tail-used!))
-	     (begin
-	       (emit 'sel >then >else)
-	       (cmplr >then env (caddr exp) 'join)
-	       (cmplr >else env (cadddr exp) 'join)))))
+       (if (and (pair? (cadr exp)) (eq? (caadr exp) 'not))
+	   (recur/tail `(if ,(cadadr exp) ,(cadddr exp) ,(caddr exp)))
+	   (let ((>then (block-fork block))
+		 (>else (block-fork block)))
+	     (recur (cadr exp))
+	     (if tail
+		 (begin
+		   (emit 'tsel >then >else)
+		   (cmplr >then env (caddr exp) tail)
+		   (cmplr >else env (cadddr exp) tail)
+		   (tail-used!))
+		 (begin
+		   (emit 'sel >then >else)
+		   (cmplr >then env (caddr exp) 'join)
+		   (cmplr >else env (cadddr exp) 'join))))))
       ((lambda)
        (unless (and (list? (cadr exp)) (andmap symbol? (cadr exp)))
 	 (error "unsupported argument list:" exp))
@@ -215,6 +217,8 @@
       ((let*)
        (if (null? (cadr exp)) (recur (caddr exp))
 	   (recur/tail `(let (,(caadr exp)) (let* ,(cdadr exp) ,@(cddr exp))))))
+      ((not)
+       (recur/tail `(= 0 ,@(cdr exp))))
 
       (else (error "unhandled operator:" exp))))
    (else (error "unhandled expression:" exp)))
