@@ -40,7 +40,7 @@ updn:   mov a, e
 	; Change directions if not normal.
 flop:	int 3
 	int 6
-	mul a, b
+	mul a, [0]
 	add a, e
 poke:	and a, 3
 	int 0

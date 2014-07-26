@@ -34,15 +34,15 @@ updn:   mov a, e
 	or e, a
 	; At last, e points toward Lambda-Man.
 	; Now randomly mess things up if we're far away.
-	mov a, [g]
-	add a, [h]
+	mov c, [g]
+	add c, [h]
 	mul b, 12
-	jlt flop, b, a
-	xor e, a
+	jlt flop, b, c
+	xor e, c
 	; Change directions if not normal.
 flop:	int 3
 	int 6
-	mul a, b
+	mul a, c
 	add a, e
 poke:	and a, 3
 	int 0
