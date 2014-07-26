@@ -1,31 +1,46 @@
-where:	int 1
+	; Lambda-Man 1 -> c, d
+	int 1
 	mov c, a
 	mov d, b
+	; Self position -> a, b
 	int 3
 	int 5
-	mov e, 0
+	; Proceed by cases...
+	mov e, 4
+	; If left, reflect x.  |dx| -> c
 	jgt right, c, a
-	add e, 2
+left:	add e, 1
 	xor a, c
 	xor c, a
 	xor a, c
 right:	sub c, a
+	; If down, reflect y.  |dy| -> d
 	jlt up, d, b
-	add e, 1
+down:	add e, 2
 	xor b, d
 	xor d, b
 	xor b, d
 up:	sub d, b
-	jgt ccw, d, b
-	mov d, b
-	add e, 1
-	and e, 3
-ccw:	int 3
-	mul a, 4
-	inc a
-	div d, a
-	add e, d
-	and e, 3
+	; up/down octants vs. left/right.  max(|dx|,|dy|) -> d
+	jgt updn, d, c
+lfrt:	mov d, c
+	; BIT HAX AHOY:
+	mul e, 2
+	; e&8 = left or right; e&2 = down or left
+updn:   mov a, e
+	div e, 8
+	and a, 2
+	or e, a
+	; At last, e points toward Lambda-Man.
+	; Commented-out code to apply chaos if far from the man.
+	;; int 3
+	;; mul a, 4
+	;; inc a
+	;; div d, a
+	;; add e, d
+	;; and e, 3
+	; Swap directions if not normal.
+	; FIXME: don't swap if "invisible".
 	int 3
 	int 6
 	jeq poke, a, 0
