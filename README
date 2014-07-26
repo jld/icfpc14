@@ -1,0 +1,13 @@
+If you're reading this file, you may want to look at:
+
+* `cmplr.sch`, which compiles a tiny Lisp dialect (mostly Scheme-like
+   naming rather than CL, but Lisp-2) into code for the Lambda-Man
+   CPU.  The host language is Racket (but I haven't yet bothered with
+   using modules instead of just `load`ing into a REPL -- among other
+   questionable code style choices).
+
+* `examples.sch`, which is where the currently extant AIs are.
+  `simplesearch` is the best (least bad?) one I've written so far.
+
+* `NOTES`, where I have a bunch of notes to myself about ideas I
+  haven't implemented yet, and indeed may never actually implement.
