@@ -32,19 +32,16 @@ updn:   mov a, e
 	and a, 2
 	or e, a
 	; At last, e points toward Lambda-Man.
-	; Commented-out code to apply chaos if far from the man.
-	;; int 3
-	;; mul a, 4
-	;; inc a
-	;; div d, a
-	;; add e, d
-	;; and e, 3
-	; Swap directions if not normal.
-	; FIXME: don't swap if "invisible".
-	int 3
+	; Now randomly mess things up if we're far away.
+	add [0], 157
+	mul b, 12
+	jlt flop, b, [0]
+	xor e, [0]
+	; Change directions if not normal.
+flop:	int 3
 	int 6
-	jeq poke, a, 0
-	xor e, 2
-poke:	mov a, e
+	mul a, b
+	add a, e
+poke:	and a, 3
 	int 0
 	hlt
