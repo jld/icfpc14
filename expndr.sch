@@ -1,36 +1,3 @@
-(define (expand thing)
-  (cond
-   ((and (pair? thing) (assq (car thing) (expanders))) =>
-    (lambda (exp)
-      (let ((new-thing ((cadr exp) (cdr thing))))
-	(if (eq? (car thing) (car new-thing))
-	    new-thing
-	    (expand new-thing)))))
-   (else thing)))
-
-(define (core-form-expandable? form)
-  (and (pair? form)
-       (case (car form)
-	 ((& if ret ret/ffi goto bind seq
-	     + - * / cons car cdr atom = > >= debug break not)
-	  '(#f . #t))
-	 ((set lambda lambda/ffi)
-	  '(#f #f #t))
-	 ((call)
-	  '(#f #f #t #t))
-	 ((var rec)
-	  (for/list ((i naturals)
-		     (_ (in-list form)))
-	    (odd? i))))))
-
-(define (expand-recursively form)
-  (let loop ((exp? (core-form-expandable? form)) (form form))
-    (cond
-     ((eq? exp? #t) (expand form))
-     ((or (not exp?) (null? exp?)) form)
-     (else (cons (loop (car exp?) (car form))
-		 (loop (cdr exp?) (cdr form)))))))
-
 (define (classify-core-form form)
   (if (not (pair? form)) 'expr
       (case (car form)
@@ -67,23 +34,42 @@
 (define (fix-var-list vl)
   (if (symbol? vl) (list vl) vl))
 
-(define the-primops '(+ - * / cons car cdr atom? = > >= debug break not))
-
-(define expanders
-  (make-parameter
-   `((begin ,expand-begin)
-     ,@(map (lambda (head)
-	      (list head (lambda (el) (list head (fix-expr-list (map expand el))))))
-	    `(ret ret/ffi ,@the-primops))
-     (set ,(lambda (things)
-	     `(set ,(fix-var-list (car things)) ,(fix-expr-list
-						  (map expand (cdr things))))))
-     ,@(map (lambda (head)
-	      (list head (lambda (things)
-			   (list head (fix-var-list (car things)) (expand-begin (cdr things))))))
-	    '(lambda lambda/ffi))
-     ;; More stuff goes here.
-     )))
-	    
-
-
+(define (expand form)
+  (cond
+   ((not (pair? form)) form)
+   (else
+    (case (car form)
+      ((begin)
+       (expand-begin (cdr form)))
+      ((ret ret/ffi + - * / cons car cdr atom? = > >= debug break not)
+       `(,(car form) ,(fix-expr-list (map expand (cdr form)))))
+      ((&)
+       `(& ,@(map expand (cdr form))))
+      ((set)
+       `(set ,(fix-var-list (cadr form))
+	     ,(fix-expr-list (map expand (cddr form)))))
+      ((lambda lambda/ffi)
+       `(,(car form) ,(fix-var-list (cadr form)) ,(expand-begin (cddr form))))
+      ((goto)
+       `(goto ,(expand (cadr form)) ,(fix-expr-list (map expand (cddr form)))))
+      ((seq bind)
+       `(,(car form) ,(expand (cadr form)) ,(expand-begin (cddr form))))
+      ((if)
+       (let loop ((predic (expand (car things)))
+		  (conseq (expand (cadr things)))
+		  (altern (expand (caddr things))))
+	 (if (and (pair? predic) (eq? (car predic) 'not))
+	     (loop (cadr predic altern conseq))
+	     `(if ,predic ,conseq ,altern))))
+      ((var rec)
+       `(,(car form)
+	 ,@(let loop ((stuff (cdr form)))
+	     (if (null? stuff) '()
+		 `(,(fix-var-list (car stuff))
+		   ,(expand (cadr stuff))
+		   ,@(loop (cddr stuff)))))))
+      ((call)
+       `(call ,(fix-var-list (cadr form))
+	      ,(expand (caddr form))
+	      ,(fix-expr-list (map expand (cdddr form)))))
+     ))))
