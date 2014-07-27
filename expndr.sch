@@ -1,3 +1,5 @@
+(load "ncheck.sch") ;; FIXME
+
 (define (classify-core-form form)
   (if (not (pair? form)) 'expr
       (case (car form)
