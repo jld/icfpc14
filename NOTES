@@ -82,34 +82,58 @@ More ABI wonkery:
 * More-also, it's possible to transparently save/restore the stack.
 ** But this might not be necessary.
 
-Here we go again:
 
-e ::= x | C
+This has turned into almost an actual language definition; it should maybe go somewhere else:
+
+e ::= n | C
     | (op e)
     | (set (x*) e)
     | (if e e e)
-    | (lambda (x*) t)
+    | (lambda (x*) s)
+    | (class n (x*) s)
     | (& e*)
 
-t ::= (ret e)
+x ::= n
+    | (: n t)
+
+t ::= n | int | lambda
+
+s ::= (ret e)
     | (goto e e)
-    | (bind b t)
-    | (seq e t)
-    | (if e t t)
+    | (bind b s)
+    | (seq e s)
+    | (if e s s)
 
 b := (var (x*) e ...)
    | (rec (x*) e ...)
    | (call (x*) e e)
 
-Expansions:
-* implicit seq and &
-* x => (x) for binder.
-* flattenability for b, for macros.  Maybe just expand to lists?
-* t :+= (begin (b|e)* t?)
-** t :+= (begin (b|e|x)* t?)
-** x ::= (flat (b|e)*)
-* (block (x*) t) => (call (x*) (lambda () t))
-** But then isn't (var (x*) e) => (block (x*) (ret e))?
-*** Yes and no: (var ...) is arity-checked.
-* Note that (seq e (ret)) === (ret e).
+Inference seems like it ought to happen in the expander, but:
+* Now we're running check multiple times, and contemplating unrolling.  No.
+* Memoize with an eq-hash?
+** Make your code faster with this one weird trick!  GC researchers hate him!
 
+The type checking context, also, mutably:
+* map from class names to arg/ret lb/ub
+* classes lower arg-u / raise ret-l; calls raise arg-l; lower ret-u
+* as a side-effect, also knows all the classes for each name
+
+
+TODO, maybe, expansions:
+* (block (x*) t) => (call (x*) (class ,(gensym) () t))
+** But then isn't (var (x*) e) => (block (x*) (ret e))?
+*** Yes and no: (var) gets better error messages for type mismatch.
+* when/unless
+
+Notes on s/b cost:
+(ret e) => (cost e) 1 kmagic 1
+(goto e e) => (cost e1) (cost e2) amagic 1 (cost v)
+(seq e t) => (cost e) (cost t)
+(bind b t) => (cost b) (cost t)
+(if e t t) => (cost e) 1 (max (cost t0) (cost t1))
+
+(var _ e ...) => (sum cost es) 1 1
+(rec _ e ...) => (sum cost es) 2 1
+(call xs e1 e2) => (cost e1) (cost e2) amagic 1 (cost v)
+
+(bind (yield) t) => C (later, (cost t))

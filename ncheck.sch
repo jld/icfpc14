@@ -1,3 +1,50 @@
+(define (make-decl name type) (if type (list ': name type) name))
+(define (decl-name decl) (if (symbol? decl) decl (cadr decl)))
+(define (decl-type decl) (if (symbol? decl) #f (caddr decl)))
+
+(define (type? type)
+  (or (not type) (symbol? type)))
+(define (decl? decl)
+  (or (symbol? decl)
+      (and (pair? decl) (pair? (cdr decl)) (pair? (cddr decl)) (null? (cdddr decl))
+	   (eq? (car decl) ':) (symbol? (cadr decl)) (type? (caddr decl)))))
+
+(define (type-class? type)
+  (and (symbol? type)
+       (not (memq type '(int lambda)))))
+
+(define (subtype? l r)
+  (or
+   (not r)
+   (and (eq? l int) (type-class? r))
+   (eq? l r)))
+
+(define (subtypes? l r)
+  (or
+   (null? l)
+   (and (pair? r) (subtype? (car l) (car r)) (subtypes? (cdr l) (cdr r)))))
+
+(define (type-lub l r)
+  (or
+   (and (eq? l r) l)
+   (and (eq? l 'int) (type-class? r) 'int)
+   (and (eq? r 'int) (type-class? l) 'int)))
+
+(define (types-lub l r)
+  (and l r
+       (or
+	(and (null? l) r)
+	(and (null? r) l)
+	(cons (type-lub (car a) (car d)) (types-lub (cdr a) (cdr d))))))
+
+(define (types-glb l r)
+  (or
+   (and (not l) r)
+   (and (not r) l)
+   (and (or (null? l) (null? r)) '())
+   (and (pair? l) (pair? r)
+	(cons (type-glb (car a) (car d)) (types-glb (cdr a) (cdr d))))))
+
 (define (env-lookup env var)
   (let floop ((env env) (n 0))
     (when (null? env)
@@ -5,50 +52,101 @@
     (let vloop ((frame (car env)) (i 0))
       (cond
        ((null? frame) (floop (cdr env) (+ n 1)))
-       ((eq? (car frame) var) (values n i))
+       ((eq? (decl-name (car frame)) var) (values n i (decl-type (car frame))))
        (else (vloop (cdr frame) (+ i 1)))))))
+
+(define (env-lookup-type env var)
+  (let-values (((n i t)) (env-lookup env var)) t))
 
 (define expr-primops
   (let ()
-    `((+ 2 1 (add))
-      (- 2 1 (sub))
-      (* 2 1 (mul))
-      (/ 2 1 (div))
-      (cons 2 1 (cons))
-      (car 1 1 (car))
-      (cdr 1 1 (cdr))
-      (null? 1 1 (atom))
-      (= 2 1 (ceq))
-      (> 2 1 (cgt))
-      (>= 2 1 (cgte))
-      (debug 1 0 (dbug))
-      (break 0 0 (brk))
-      (=0 1 1 (ldc 0) (ceq)))))
+    `((+     (int int) (int) (add))
+      (-     (int int) (int) (sub))
+      (*     (int int) (int) (mul))
+      (/     (int int) (int) (div))
+      (cons  (#f #f)   (#f)  (cons))
+      (car   (#f)      (#f)  (car))
+      (cdr   (#f)      (#f)  (cdr))
+      (null? (#f)      (int) (atom))
+      (=     (int int) (int) (ceq))
+      (>     (int int) (int) (cgt))
+      (>=    (int int) (int) (cgte))
+      (debug (#f)      ()    (dbug))
+      (break ()        ()    (brk))
+      (=0    (int)     (int) (ldc 0) (ceq)))))
 
 (define primop-name car)
-(define primop-arity-in cadr)
-(define primop-arity-out caddr)
+(define primop-in cadr)
+(define primop-out caddr)
 (define primop-insns cdddr)
 
 (define (check-namelist nl)
-  (unless
-      (and (list? nl)
-	   (let loop ((nl nl))
-	     (or (null? nl)
-		 (and (symbol? (car nl))
-		      (not (memq (car nl) (cdr nl)))
-		      (loop (cdr nl))))))
-    (error "not a list of unique names:" nl)))
+  (unless (list? nl)
+    (error "name list isn't a list:" nl))
+  (let loop ((nl nl) (ns '()) (ts '()))
+    (if (null? nl) (reverse ts)
+	(begin
+	  (unless (decl? (car nl))
+	    (error "not a variable declaration:" (car nl)))
+	  (let ((n (decl-name (car nl)))
+		(t (decl-type (car nl))))
+	  (when (memq n ns)
+	    (error "duplicate variable name in"
+		   (append (reverse (map make-decl ns ts)) nl)))
+	  (loop (cdr nl) (cons n ns) (cons t ts)))))))
 
-(define (check-expr exp) ; -> arity
+(struct tcx (env bounds) #:constructor-id make-tcx)
+(struct bounds (cln al au rl ru) #:mutable #:constructor-id make-bounds)
+(define (new-bounds cln) (make-bounds cln '() #f '() #f))
+(define (bounds-check! b)
+  (unless (subtypes? (bounds-al b) (bounds-au b))
+    (error 'bounds-check! "class ~a called with ~a but expects ~a"
+	   (bounds-cln b) (bounds-al b) (bounds-au b)))
+  (unless (subtypes? (bounds rl b) (bounds ru b))
+    (error 'bounds-check! "class ~a returns ~a but asked for ~a"
+	   (bounds cln b) (bounds-rl b) (bounds-ru b))))
+
+(define (new-tcx env) (make-tcx env (make-hasheq))
+(define (tcx-nest tcx frame) (make-tcx (cons frame (tcx-env tcx))
+				       (tcx-bounds tcx)))
+(define (tcx-ref tcx id) (env-lookup-type (tcx-env tcx) id))
+(define (tcx-get-bounds tcx cln)
+  (hash-ref! (tcx-bounds ctx) cln (lambda () (new-bounds cln))))
+
+(define (bounds-note-class! b atys)
+  (set-bounds-au! b (types-lub (bounds-au b) atys))
+  (bounds-check! b))
+(define (bounds-note-ret! b rtys)
+  (set-bounds-rl! b (types-glb (bounds-rl b) atys))
+  (bounds-check! b))
+(define (bounds-note-call! b atys rtys)
+  (set-bounds-al! b (types-glb (bounds-al b) atys))
+  (set-bounds-ru! b (types-lub (bounds-ru b) rtys))
+  (bounds-check! b))
+
+(define (tcx-note-class! tcx cln atys)
+  (bounds-note-class! (tcx-get-bounds tcx cln) atys))
+(define (tcx-note-ret! tcx cln rtys)
+  (bounds-note-ret! (tcx-get-bounds tcx cln) rtys))
+(define (tcx-note-call! tcx cln atys rtys)
+  (bounds-note-call! (tcx-get-bounds tcx cln) atys rtys))
+(define (tcx-note-goto! tcx fcln tcln atys)
+  (let ((bf (tcx-get-bounds tcx from-cln))
+	(bt (tcx-get-bounds tcx to-cln)))
+    (bounds-note-call! bt atys (bounds-ru bf))
+    (bounds-note-ret! bf (bounds-rl bt))))
+
+(define (check-expr tcx exp) ; -> types
+  (define (recur exp) (check-expr tcx exp))
+
   (cond
    ((integer? exp)
     (unless (and (>= exp #x-80000000) (<= exp #x7fffffff))
       (error "integer out of range:" exp))
-    1)
+    '(int))
 
    ((symbol? exp)
-    1)
+    (list (tcx-ref tcx exp)))
 
    ((or (null? exp) (not (list? exp)))
     (error "unrecognized expression:" exp))
@@ -56,39 +154,49 @@
    ((and (= (length exp) 2) (assq (car exp) expr-primops)) =>
     (lambda (opinfo)
       (let* ((arg (cadr exp))
-	     (arity-in (check-expr arg))
-	     (needed (primop-arity-in opinfo)))
-	(unless (if (>= needed 0) (= arity-in needed) (>= arity-in (- needed)))
-	  (error "operator arity mismatch:" exp))
-	(primop-arity-out opinfo))))
+	     (given (recur arg))
+	     (needed (primop-in opinfo)))
+	(unless (subtypes? given needed)
+	  (error "operator type mismatch:" exp needed))
+	(primop-out opinfo))))
 
-   ((and (eq? (car exp) '&) (list? (cdr exp)))
-    (for/sum ((exp (cdr exp))) (check-expr exp)))
+   ((and (eq? (car exp) '&))
+    (apply append ((exp (cdr exp))) (recur exp)))
 
-   ((and (eq? (car exp) 'if) (list? exp) (= (length exp) 4))
+   ((and (eq? (car exp) 'if) (= (length exp) 4))
      (let ((predic (cadr exp))
 	   (conseq (caddr exp))
 	   (altern (cadddr exp)))
-       (unless (= (check-expr predic) 1)
+       (unless (subtypes? (recur predic) '(int))
 	 (error "condition guard not unary:" exp))
-       (let ((arity-conseq (check-expr conseq))
-	     (arity-altern (check-expr altern)))
+       (let ((arity-conseq (recur conseq))
+	     (arity-altern (recur altern)))
 	 (unless (= arity-conseq arity-altern)
 	   (error "conditional arity mismatch:" exp))
 	 arity-conseq)))
 
-   ((and (memq (car exp) '(lambda lambda/ffi)) (list? exp) (= (length exp) 3))
+   ((and (eq? (car exp) 'lambda) (= (length exp) 3))
     (check-namelist (cadr exp))
-    (check-stmt (caddr exp) (eq? (car exp) 'lambda/ffi))
-    1)
+    (check-stmt (caddr exp) #f)
+    '(lambda))
+
+   ((and (eq? (car exp) 'class) (= (length exp) 4))
+    (let ((cln (cadr exp)))
+      (unless (type-class? cln)
+	(error "invalid class name" (cadr exp)))
+      (let ((atys (check-namelist (caddr exp))))
+	(tcx-note-class! tcx (cadr exp) atys)
+	(check-stmt tcx (cadddr exp)) cln)
+      (list cln)))
 
    ((and (eq? (car exp) 'set) (list? exp) (= (length exp) 3))
     (let* ((vars (cadr exp))
-	   (init (caddr exp)))
-      (check-namelist vars)
-      (unless (= (check-expr init) (length vars))
-	(error "mutation arity mismatch:" exp))
-      0))
+	   (init (caddr exp))
+	   (vtys (check-namelist vars))
+	   (itys (recur init)))
+      (unless (subtypes? itys vtys)
+	(error "mutation type mismatch:" vtys exp))
+      '()))
 
    (else
     (error "unrecognized expression:" exp))))
@@ -97,7 +205,7 @@
   (cond
    ((or (integer? exp)
 	(symbol? exp)
-	(memq (car exp) '(lambda lambda/ffi))) 1)
+	(memq (car exp) '(class lambda))) 1)
    ((eq? (car exp) '&)
     (for/sum ((exp (cdr exp))) (expr-cost exp)))
    ((assq (car exp) expr-primops) =>
@@ -116,77 +224,82 @@
     (error "unrecognized expression:" exp))))
 
 
-
-(define (check-stmt stmt (ffi? #f))
+(define (check-stmt tcx cln stmt)
   (cond
    ((or (null? stmt) (not (list? stmt)))
     (error "unrecognized statement:" stmt))
 
    ((and (eq? (car stmt) 'ret) (= (length stmt) 2))
-    (when ffi?
-      (error "not allowed in FFI context:" stmt))
-    (check-expr (cadr stmt))
-    (void))
-
-   ((and (eq? (car stmt) 'ret/ffi) (= (length stmt) 2))
-    (unless ffi?
-      (error "allowed only in FFI context:" stmt))
-    (unless (= (check-expr (cadr stmt)) 1)
-      (error "FFI return value not unary:" (cadr stmt)))
-    (void))
+    (tcx-note-ret! tcx cln (check-expr tcx (cadr stmt))))
 
    ((and (eq? (car stmt) 'goto) (= (length stmt) 3))
-    (when ffi?
-      (error "not allowed in FFI context:" stmt))
-    (unless (= (check-expr (cadr stmt)) 1)
-      (error "function expression not unary:" (cadr stmt)))
-    (check-expr (caddr stmt))
-    (void))
+    (unless cln
+      (error "not allowed in a lambda:" stmt))
+    (let ((ftys (check-expr tcx (cadr stmt)))
+	  (etys (check-expr tcx (caddr stmt))))
+      (unless (and (= (length ftys) 1) (type-class? (car ftys)))
+	(error "not a class instance:" (cadr stmt)))
+      (tcx-note-goto! tcx cln (car ftys) etys)))
 
    ((and (eq? (car stmt) 'bind) (= (length stmt) 3))
-    (check-bind (cadr stmt))
-    (check-stmt (caddr stmt) ffi?))
+    (check-stmt (check-bind tcx (cadr stmt)) (caddr stmt) cln))
 
    ((and (eq? (car stmt) 'seq) (= (length stmt) 3))
-    (unless (zero? (check-expr (cadr stmt)))
+    (unless (null? (check-expr tcx (cadr stmt)))
       (error "non-nullary expression used for effect only:" (cadr stmt)))
-    (check-stmt (caddr stmt) ffi?))
+    (check-stmt tcx (caddr stmt) cln))
 
    ((and (eq? (car stmt) 'if) (= (length stmt) 4))
-    (unless (= (check-expr (cadr stmt)) 1)
+    (unless (subtypes? (check-expr (cadr stmt)) '(int))
       (error "condition guard not unary:" stmt))
-    (check-stmt (caddr stmt) ffi?)
-    (check-stmt (cadddr stmt) ffi?))
+    (check-stmt (caddr stmt) cln)
+    (check-stmt (cadddr stmt) cln))
 
    (else
     (error "unrecognized statement:" stmt))))
 
 
-(define (check-bind bind)
+(define (check-bind tcx bind) ; -> tcx'
   (cond
-   ((not (list? bind))
+   ((or (null? bind) (not (list? bind)))
     (error "unrecognized binding:" bind))
 
    ((and (memq (car bind) '(var rec)) (odd? (length bind)))
-    (let loop ((stuff (cdr bind)))
-      (unless (null? stuff)
-	(check-namelist (car stuff))
-	(unless (= (length (car stuff)) (check-expr (cadr stuff)))
-	  (error "arity mismatch in binding:"
-		 (list (car bind) (car stuff) (cadr stuff))))
-	(loop (cddr stuff)))))
+    (let-values
+	(((rec?) (eq? (car bind) 'rec))
+	 ((frame vtys exprs))
+	 (let loop ((stuff (cdr bind)) (a-decls '()) (a-vtys '()) (a-exprs '()))
+	   (if (null? stuff)
+	       (values (apply append (reverse a-decls))
+		       (reverse a-vtys)
+		       (reverse a-exprs))
+	       (let* ((decls (car stuff))
+		      (vtys (check-namelist decls))
+		      (expr (cadr stuff)))
+		 (loop (cddr stuff)
+		       (cons decls a-decls)
+		       (cons vtys a-vtys)
+		       (cons exprs a-exprs))))))
+      (let ((new-tcx (tcx-push tcx frame)))
+	(for ((vty vtys) (expr exprs))
+	  (let ((etys (check-expr (if rec? new-tcx tcx) expr)))
+	    (unless (subtypes? etys vtys)
+	      (error "type mismatch in binding:" bind))))
+	new-tcx)))
 
    ((and (eq? (car bind) 'call) (= (length bind) 4))
-    (check-namelist (cadr bind))
-    (unless (= (check-expr (caddr bind)) 1)
-      (error "function expression not unary:" (cadr stmt)))
-    (check-expr (cadddr bind))
-    (void))
+    (let ((vtys (check-namelist (cadr bind)))
+	  (ftys (check-expr (caddr bind)))
+	  (etys (check-expr (cadddr bind))))
+      (unless (and (= (length ftys) 1) (type-class? (car ftys)))
+	(error "not a class instance:" (caddr bind)))
+      (tcx-note-call! tcx (car ftys) etys vtys)
+      (tcx-nest tcx (cadr bind))))
 
    (else
     (error "unrecognized binding:" bind))))
 
 
-(define (check-toplevel tl)
-  (check-stmt tl #t))
+(define (check-toplevel tcx tl)
+  (check-stmt tcx tl #f))
 

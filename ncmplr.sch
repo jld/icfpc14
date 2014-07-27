@@ -3,6 +3,9 @@
 
 (define cc-name '*continuation*)
 
+(define (env-access emit ldst env var)
+  (let-values (((n i t)) (env-lookup env var)) (emit ldst n i)))
+
 (define (compile-expr block env exp (join? #f))
   (define (emit . args) (apply block-emit block args))
   (define (recur exp) (compile-expr block env exp))
@@ -12,8 +15,7 @@
     (emit 'ldc exp))
 
    ((symbol? exp)
-    (let-values (((frame slot) (env-lookup env exp)))
-      (emit 'ld frame slot)))
+    (env-access 'ld frame slot))
 
    ((assq (car exp) expr-primops) =>
     (lambda (opinfo)
@@ -48,8 +50,7 @@
 	     (init (caddr exp)))
 	 (recur init)
 	 (for ((var (reverse vars)))
-	   (let-values (((frame slot) (env-lookup env var)))
-	     (emit 'st frame slot)))))
+	   (env-access emit 'st env var))))
 
       (else
        (error "internal error: unrecognized expression:" exp)))))
@@ -67,7 +68,7 @@
 
     ((ret)
      (compile-expr block env (cadr stmt))
-     (compile-expr block env cc-name)
+     (env-access emit 'ld env cc-name)
      (emit 'tap (check-expr (cadr stmt)))) ; FIXME: double-traversal
 
     ((ret/ffi)
@@ -76,7 +77,7 @@
 
     ((goto)
      (compile-expr block env (caddr stmt))
-     (compile-expr block env cc-name)
+     (env-access emit 'ld env cc-name)
      (compile-expr block env (cadr stmt))
      (emit 'tap (+ 1 (check-expr (caddr stmt))))) ; FIXME: double-traversal
 
