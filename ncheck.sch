@@ -11,52 +11,55 @@
 
 (define (type-class? type)
   (and (symbol? type)
-       (not (memq type '(int lambda)))))
+       (not (memq type '(int lambda _!_)))))
 
 (define (subtype? l r)
   (or
    (not r)
-   (and (eq? l 'int) (type-class? r))
-   (eq? l r)))
+   (eq? l '_!_)
+   (eq? l r)
+   (and (eq? l 'int) (type-class? r))))
 
 (define (subtypes? l r)
   (or
-   (not r)
-   (null? l)
-   (and l (pair? r) (subtype? (car l) (car r)) (subtypes? (cdr l) (cdr r)))))
+   (null? r)
+   (eq? l '_!_)
+   (and (pair? l) (pair? r)
+	(subtype? (car l) (car r))
+	(subtypes? (cdr l) (cdr r)))))
 
 (define (type-lub l r)
-  (or
-   (and (eq? l r) l)
-   (and (eq? l 'int) (type-class? r) r)
-   (and (eq? r 'int) (type-class? l) l)))
+  (cond
+   ((eq? l r) l)
+   ((eq? l '_!_) r)
+   ((eq? r '_!_) l)
+   ((and (eq? l 'int) (type-class? r)) r)
+   ((and (eq? r 'int) (type-class? l)) l)
+   (else #f)))
 
 (define (type-glb l r)
-  (or
-   (and (eq? l r) l)
-   (and (not l) r)
-   (and (not r) l)
-   (and (eq? l 'int) (type-class? r) l)
-   (and (eq? r 'int) (type-class? l) r)
-   (and (type-class? l) (type-class? r) 'int)
-   #t)) ; This is unfortunate.
+  (cond
+   ((eq? l r) l)
+   ((not l) r)
+   ((not r) l)
+   ((and (eq? l 'int) (type-class? r) l))
+   ((and (eq? r 'int) (type-class? l) r))
+   ((and (type-class? l) (type-class? r)) 'int)
+   (else '_!_)))
 
 (define (types-lub l r)
-  (and l r
-       (or
-	(and (null? l) r)
-	(and (null? r) l)
-	(cons (type-lub (car l) (car r)) (types-lub (cdr l) (cdr r))))))
+  (cond
+   ((or (null? l) (null? r)) '())
+   ((eq? l '_!_) r)
+   ((eq? r '_!_) l)
+   (else (cons (type-lub (car l) (car r)) (types-lub (cdr l) (cdr r))))))
 
 (define (types-glb l r)
-  (or
-   (and (not l) r)
-   (and (not r) l)
-   (and (or (null? l) (null? r)) '())
-   (and (pair? l) (pair? r)
-	(let ((car-glb (type-glb (car l) (car r))))
-	  (if (eq? car-glb #t) '()
-	      (cons car-glb (types-glb (cdr l) (cdr r))))))))
+  (cond
+   ((or (eq? l '_!_) (eq? r '_!_)) '_!_)
+   ((null? l) r)
+   ((null? r) l)
+   (else (cons (type-glb (car l) (car r)) (types-glb (cdr l) (cdr r))))))
 
 (define (env-lookup env var)
   (let floop ((env env) (n 0))
@@ -110,7 +113,7 @@
 
 (struct tcx (env bounds) #:constructor-name make-tcx)
 (struct bounds (cln al au rl ru) #:mutable #:transparent #:constructor-name make-bounds)
-(define (new-bounds cln) (make-bounds cln '() #f '() #f))
+(define (new-bounds cln) (make-bounds cln '_!_ '() '_!_ '()))
 (define (bounds-check! b)
   (unless (subtypes? (bounds-al b) (bounds-au b))
     (error 'bounds-check! "class ~a called with ~a but expects ~a"
@@ -174,34 +177,35 @@
 	(primop-out opinfo))))
 
    ((and (eq? (car exp) '&))
-    (apply append ((exp (cdr exp))) (recur exp)))
+    (apply append (map recur (cdr exp))))
 
    ((and (eq? (car exp) 'if) (= (length exp) 4))
      (let ((predic (cadr exp))
 	   (conseq (caddr exp))
 	   (altern (cadddr exp)))
        (unless (subtypes? (recur predic) '(int))
-	 (error "condition guard not unary:" exp))
-       (types-glb (recur-conseq) (recur altern))))
+	 (error "condition guard is not an int in" exp))
+       (types-lub (recur conseq) (recur altern))))
 
    ((and (eq? (car exp) 'lambda) (= (length exp) 3))
     (check-namelist (cadr exp))
-    (check-stmt (caddr exp) #f)
+    (check-stmt tcx #f (caddr exp))
     '(lambda))
 
    ((and (eq? (car exp) 'class) (= (length exp) 4))
-    (let ((cln (cadr exp)))
+    (let ((cln (cadr exp))
+	  (frame (caddr exp)))
       (unless (type-class? cln)
-	(error "invalid class name" (cadr exp)))
-      (let ((atys (check-namelist (caddr exp))))
+	(error "invalid class name:" cln))
+      (let ((atys (check-namelist frame)))
 	(tcx-note-class! tcx (cadr exp) atys)
-	(check-stmt tcx (cadddr exp)) cln)
+	(check-stmt (tcx-nest tcx frame) cln (cadddr exp)))
       (list cln)))
 
    ((and (eq? (car exp) 'set) (list? exp) (= (length exp) 3))
     (let* ((vars (cadr exp))
 	   (init (caddr exp))
-	   (vtys (check-namelist vars))
+	   (vtys (map (lambda (v) (tcx-ref tcx v)) vars))
 	   (itys (recur init)))
       (unless (subtypes? itys vtys)
 	(error "mutation type mismatch:" vtys exp))
@@ -239,7 +243,13 @@
     (error "unrecognized statement:" stmt))
 
    ((and (eq? (car stmt) 'ret) (= (length stmt) 2))
+    (unless cln
+      (error "not allowed in a lambda:" stmt))
     (tcx-note-ret! tcx cln (check-expr tcx (cadr stmt))))
+
+   ((and (eq? (car stmt) 'halt) (= (length stmt) 2))
+    (check-expr tcx (cadr stmt))
+    (void))
 
    ((and (eq? (car stmt) 'goto) (= (length stmt) 3))
     (unless cln
@@ -259,10 +269,10 @@
     (check-stmt tcx (caddr stmt) cln))
 
    ((and (eq? (car stmt) 'if) (= (length stmt) 4))
-    (unless (subtypes? (check-expr (cadr stmt)) '(int))
-      (error "condition guard not unary:" stmt))
-    (check-stmt (caddr stmt) cln)
-    (check-stmt (cadddr stmt) cln))
+    (unless (subtypes? (check-expr tcx (cadr stmt)) '(int))
+      (error "condition guard is not an int in" stmt))
+    (check-stmt tcx cln (caddr stmt))
+    (check-stmt tcx cln (cadddr stmt)))
 
    (else
     (error "unrecognized statement:" stmt))))
@@ -289,7 +299,7 @@
 			(cons decls a-decls)
 			(cons vtys a-vtys)
 			(cons exprs a-exprs)))))))
-      (let ((new-tcx (tcx-push tcx frame)))
+      (let ((new-tcx (tcx-nest tcx frame)))
 	(for ((vty vtys) (expr exprs))
 	  (let ((etys (check-expr (if rec? new-tcx tcx) expr)))
 	    (unless (subtypes? etys vtys)

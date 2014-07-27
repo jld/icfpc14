@@ -87,7 +87,7 @@ This has turned into almost an actual language definition; it should maybe go so
 
 e ::= n | C
     | (op e)
-    | (set (x*) e)
+    | (set (n*) e)
     | (if e e e)
     | (lambda (x*) s)
     | (class n (x*) s)
@@ -99,6 +99,7 @@ x ::= n
 t ::= n | int | lambda
 
 s ::= (ret e)
+    | (halt e)
     | (goto e e)
     | (bind b s)
     | (seq e s)
@@ -137,3 +138,15 @@ Notes on s/b cost:
 (call xs e1 e2) => (cost e1) (cost e2) amagic 1 (cost v)
 
 (bind (yield) t) => C (later, (cost t))
+
+
+I HATE LATTICE THEORY.
+
+1. '()
+2. '(a . d)
+3. _|_
+
+1. #f
+2. cls, (lam)
+3. int
+4. _|_
