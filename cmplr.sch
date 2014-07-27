@@ -1,42 +1,4 @@
-(struct block (insns children base) #:mutable)
-(define (new-block) (block '() '() #f))
-(define (block-emit block op . args)
-  (set-block-insns! block (cons (cons op args) (block-insns block))))
-(define (block-fork parent)
-  (let ((child (new-block)))
-    (set-block-children! parent (cons child (block-children parent)))
-    child))
-(define (block-descendents main)
-  (let ((acc '()))
-    (let loop ((block main))
-      (set! acc (cons block acc))
-      (for-each loop (reverse (block-children block))))
-    (reverse acc)))
-
-(define (block-layout! main)
-  (for/fold ((here 0)) ((block (in-list (block-descendents main))))
-    (set-block-base! block here)
-    (+ here (length (block-insns block)))))
-
-(define (insn-fmt op args)
-  (apply string-append (string-upcase (symbol->string op))
-	 (map (lambda (arg) (format " ~a" arg)) args)))
-(define (arg-expand arg)
-  (if (block? arg) (block-base arg) arg))
-
-(define (block->strings main (with-labels #f))
-  (block-layout! main)
-  (reverse
-   (for/fold ((lines '()))
-       ((block (in-list (block-descendents main)))
-	#:when #t
-	(insn (in-list (reverse (block-insns block))))
-	(i (in-naturals (block-base block))))
-     (let ((op (car insn))
-	   (args (cdr insn))
-	   (prefix (if with-labels (format "~a: " i) "")))
-       (cons (string-append prefix (insn-fmt op (map arg-expand args)) "\n") lines)))))
-
+(load "block.sch") ;; FIXME
 
 (define cmplr-ndebug (make-parameter #f))
 

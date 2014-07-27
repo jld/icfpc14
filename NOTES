@@ -69,3 +69,42 @@ Thoughts on the second-day twist:
 *** Yeah, someone could idiom-recognize it... but I bet they won't.
 ** Doing the occasional computed goto (that doesn't actually matter) would be a nice touch.
 * Note that running out of cycles is equivalent to HALT, unlike for LMan.
+
+More ABI wonkery:
+* There's no reason you can't pass return values on the env-stack.  It's just slower, and
+  this is called "CPS".  But.  This allows safely variadic continuations for effects.
+** If funcall is restricted to let/funcall (or tail calls), the continuation is right there.
+** Yes, it can be transformed... but I haven't written that much actual code yet.
+** Related: syntactic sugar for let-nesting would be nice in general.
+*** Am I really considering radical language change?
+* Also, arguments can be passed on the data stack, if you know what you're doing.
+** To wit, if they're going to be used in a linear/ordered way.
+* More-also, it's possible to transparently save/restore the stack.
+** But this might not be necessary.
+
+Here we go again:
+
+e ::= x | C
+    | (op e)
+    | (set! (x*) e)
+    | (if e e e)
+    | (lambda (x*) t) "λ"
+    | ($$ e*)         "values"
+
+t ::= (<$ e)        "return value"
+    | (<& e e)      "tail call"
+    | (bind b t)    "begin"
+    | (if e t t)
+
+b := ($ (x*) e ...)  "let"
+   | (@ (x*) e ...)  "letrec"
+   | (& (x*) e e)    "funcall"
+
+Expansions:
+* implicit begin; implicit $$
+* x => (x) for binder.
+* (<$) if no t in lambda.
+* flattenability for b, for macros.  Maybe just lists?
+* (begin b* t)
+* (% (x*) t) => (& (x*) (lambda () t))
+** allows t => (% () t)
