@@ -111,5 +111,5 @@ Expansions:
 * (block (x*) t) => (call (x*) (lambda () t))
 ** But then isn't (var (x*) e) => (block (x*) (ret e))?
 *** Yes and no: (var ...) is arity-checked.
-* (seq e (ret)) === (ret e)
+* Note that (seq e (ret)) === (ret e).
 

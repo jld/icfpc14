@@ -189,7 +189,7 @@
 
    ((and (eq? (car stmt) 'seq) (= (length stmt) 3))
     (unless (zero? (check-expr (cadr stmt)))
-      (error "expression used for effect only not nullary:" (cadr stmt)))
+      (error "non-nullary expression used for effect only:" (cadr stmt)))
     (check-stmt (caddr stmt) ffi?))
 
    ((and (eq? (car stmt) 'if) (= (length stmt) 4))
