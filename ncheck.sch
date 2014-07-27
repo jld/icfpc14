@@ -16,26 +16,37 @@
 (define (subtype? l r)
   (or
    (not r)
-   (and (eq? l int) (type-class? r))
+   (and (eq? l 'int) (type-class? r))
    (eq? l r)))
 
 (define (subtypes? l r)
   (or
+   (not r)
    (null? l)
-   (and (pair? r) (subtype? (car l) (car r)) (subtypes? (cdr l) (cdr r)))))
+   (and l (pair? r) (subtype? (car l) (car r)) (subtypes? (cdr l) (cdr r)))))
 
 (define (type-lub l r)
   (or
    (and (eq? l r) l)
-   (and (eq? l 'int) (type-class? r) 'int)
-   (and (eq? r 'int) (type-class? l) 'int)))
+   (and (eq? l 'int) (type-class? r) r)
+   (and (eq? r 'int) (type-class? l) l)))
+
+(define (type-glb l r)
+  (or
+   (and (eq? l r) l)
+   (and (not l) r)
+   (and (not r) l)
+   (and (eq? l 'int) (type-class? r) l)
+   (and (eq? r 'int) (type-class? l) r)
+   (and (type-class? l) (type-class? r) 'int)
+   #t)) ; This is unfortunate.
 
 (define (types-lub l r)
   (and l r
        (or
 	(and (null? l) r)
 	(and (null? r) l)
-	(cons (type-lub (car a) (car d)) (types-lub (cdr a) (cdr d))))))
+	(cons (type-lub (car l) (car r)) (types-lub (cdr l) (cdr r))))))
 
 (define (types-glb l r)
   (or
@@ -43,7 +54,9 @@
    (and (not r) l)
    (and (or (null? l) (null? r)) '())
    (and (pair? l) (pair? r)
-	(cons (type-glb (car a) (car d)) (types-glb (cdr a) (cdr d))))))
+	(let ((car-glb (type-glb (car l) (car r))))
+	  (if (eq? car-glb #t) '()
+	      (cons car-glb (types-glb (cdr l) (cdr r))))))))
 
 (define (env-lookup env var)
   (let floop ((env env) (n 0))
