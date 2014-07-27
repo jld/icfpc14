@@ -32,6 +32,9 @@
 (define primop-arity-out caddr)
 (define primop-insns cdddr)
 
+(define cc-name '*continuation*)
+
+
 (define (check-namelist nl)
   (unless
       (and (list? nl) 
@@ -95,7 +98,27 @@
    (else
     (error "unrecognized expression:" exp))))
 
-(define cc-name '*continuation*)
+(define (expr-cost exp (join? #f))
+  (cond
+   ((or (integer? exp)
+	(symbol? exp)
+	(memq (car exp) '(lambda lambda/ffi))) 1)
+   ((eq? (car exp) '&)
+    (for/sum ((exp (cdr exp))) (expr-cost exp)))
+   ((assq (car exp) expr-primops) =>
+    (lambda (opinfo)
+      (+ (expr-cost (cadr exp))
+	 (length (primop-insns opinfo)))))
+   ((eq? (car exp) 'set)
+    (+ (length (cadr exp))
+       (expr-cost (caddr exp))))
+   ((eq? (car exp) 'if)
+    (+ (if join? 1 2)
+       (expr-cost (cadr exp))
+       (max (expr-cost (caddr exp) #t)
+	    (expr-cost (cadddr exp) #t))))
+   (else
+    (error "unrecognized expression:" exp))))
 
 (define (compile-expr block env exp (join? #f))
   (define (emit . args) (apply block-emit block args))
