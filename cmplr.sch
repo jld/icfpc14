@@ -37,32 +37,24 @@
 	   (prefix (if with-labels (format "~a: " i) "")))
        (cons (string-append prefix (insn-fmt op (map arg-expand args)) "\n") lines)))))
 
-(define (cmplr/prog exp (with-labels #f))
-  (let ((main (new-block)))
-    (cmplr main '((initial-world undocumented)) exp 'rtn)
-    (for-each display (block->strings main with-labels))))
 
-;; FIXME: this should unwind-protect (or whatever) the open file.
-(define (cmplr/xclip exp)
-  (let ((xclip (cadr (process "xclip -i"))))
-    (parameterize ((current-output-port xclip)) (cmplr/prog exp))
-    (close-output-port xclip)))
-
-(define (cmplr/file fn exp)
-  (with-output-to-file fn 
-    (lambda () (cmplr/prog exp))
-    #:exists 'replace))
+(define cmplr-ndebug (make-parameter #f))
 
 (define (cmplr block env exp tail)
   (define (emit . args) (apply block-emit block args))
-  (define (recur exp) (cmplr block env exp #f))
-  (define (tail-used!) (set! tail #f))
+  (define (recur exp) (cmplr block env exp '()))
+  (define (tail-used!) (set! tail '()))
   (define (recur/tail exp)
     (cmplr block env exp tail)
     (tail-used!))
+  (define (tail-drop?) (and (pair? tail) (eq? (car tail) 'drop)))
+  (define (tail-proper?)
+    (let loop ((tail tail))
+      (if (pair? tail) (loop (cdr tail))
+	  (not (null? tail)))))
   (define (for-effect!)
-    (if (eq? tail 'drop)
-	(tail-used!)
+    (if (tail-drop?)
+	(set! tail (cdr tail))
 	(emit 'ldc #xDEADBEEF)))
 
   (define (do-envop ldst sym)
@@ -131,16 +123,15 @@
 	   (let ((>then (block-fork block))
 		 (>else (block-fork block)))
 	     (recur (cadr exp))
-	     (if tail
-		 (begin
-		   (emit 'tsel >then >else)
-		   (cmplr >then env (caddr exp) tail)
-		   (cmplr >else env (cadddr exp) tail)
-		   (tail-used!))
-		 (begin
-		   (emit 'sel >then >else)
-		   (cmplr >then env (caddr exp) 'join)
-		   (cmplr >else env (cadddr exp) 'join))))))
+	     (let-values
+		 (((op new-tail)
+		   (if (tail-proper?)
+		       (values 'tsel tail)
+		       (values 'sel (append tail 'join)))))
+	       (emit op >then >else)
+	       (cmplr >then env (caddr exp) new-tail)
+	       (cmplr >else env (cadddr exp) new-tail)
+	       (tail-used!)))))
       ((lambda)
        (unless (and (list? (cadr exp)) (andmap symbol? (cadr exp)))
 	 (error "unsupported argument list:" exp))
@@ -163,7 +154,7 @@
 	     (inits (map cadr (cadr exp)))
 	     (body (cddr exp)))
 	 (emit 'dum (length vars))
-	 (for-each (lambda (init) (cmplr block (cons vars env) init #f)) inits)
+	 (for-each (lambda (init) (cmplr block (cons vars env) init '())) inits)
 	 (recur `(lambda ,vars ,@body))
 	 (if (eq? tail 'rtn)
 	     (begin
@@ -181,14 +172,14 @@
 	   (recur/tail `(begin ,@(cdar stmts) ,@(cdr stmts))))
 	  ((null? (cdr stmts)) ; Unary begin.
 	   (recur/tail (car stmts)))
-	  ((and (pair? (car stmts)) ; Trim leading syntactically-for-effect stmts.
-		(memq (caar stmts) '(set! debug break)))
-	   (cmplr block env (car stmts) 'drop)
-	   (recur/tail `(begin ,@(cdr stmts))))
-	  ; And this is the wasted value case.
 	  (else
-	   (recur/tail `(let ((,(gensym) ,(car stmts)))
-			  (begin ,@(cdr stmts))))))))
+	   (cmplr block env (car stmts) '(drop))
+	   (recur/tail `(begin ,@(cdr stmts)))))))
+
+      ((void)
+       (unless (null? (cdr exp))
+	 (error "the void stares also into you" exp))
+       (for-effect!))
 
       ((set!)
        (unless (= (length exp) 3)
@@ -200,11 +191,17 @@
       ((debug!)
        (for ((arg (in-list (cdr exp))))
 	 (recur arg)
-	 (emit 'dbug)
-	 (for-effect!)))
-      ((break!)
-       (emit 'break)
+	 (emit 'dbug))
        (for-effect!))
+      ((break!)
+       (emit 'brk)
+       (for-effect!))
+      ((assert!)
+       (if (cmplr-ndebug)
+	   (recur/tail '(void))
+	   (recur/tail `(unless ,(cadr exp)
+			  (debug! ,@(cddr exp))
+			  (break!)))))
 
       ;; fake macros
       ((let)
@@ -229,6 +226,10 @@
 	(else (recur/tail `(if ,(caadr exp)
 			       (begin ,@(cdadr exp))
 			       (cond ,@(cddr exp)))))))
+      ((when)
+       (recur/tail `(if ,(cadr exp) (begin ,@(cddr exp)) (void))))
+      ((unless)
+       (recur/tail `(when (not ,(cadr exp)) ,@(cddr exp))))
 
       ((not)
        (recur/tail `(= 0 ,@(cdr exp))))
@@ -236,6 +237,27 @@
 
       (else (error "unhandled operator:" exp))))
    (else (error "unhandled expression:" exp)))
-  (cond
-   ((eq? tail 'drop) (error "internal error: unexpected drop context in" exp))
-   ((symbol? tail) (emit tail))))
+  (when (tail-drop?)
+    (let ((>trash (block-fork block)))
+      (emit 'ldf >trash)
+      (emit 'ap 1)
+      (block-emit >trash 'rtn))
+    (set! tail (cdr tail)))
+   (unless (null? tail)
+     (emit tail)))
+
+(define (cmplr/prog exp (with-labels #f))
+  (let ((main (new-block)))
+    (cmplr main '((initial-world undocumented)) exp 'rtn)
+    (for-each display (block->strings main with-labels))))
+
+;; FIXME: this should unwind-protect (or whatever) the open file.
+(define (cmplr/xclip exp)
+  (let ((xclip (cadr (process "xclip -i"))))
+    (parameterize ((current-output-port xclip)) (cmplr/prog exp))
+    (close-output-port xclip)))
+
+(define (cmplr/file fn exp)
+  (with-output-to-file fn
+    (lambda () (cmplr/prog exp))
+    #:exists 'replace))
