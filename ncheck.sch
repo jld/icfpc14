@@ -169,11 +169,7 @@
 	   (altern (cadddr exp)))
        (unless (subtypes? (recur predic) '(int))
 	 (error "condition guard not unary:" exp))
-       (let ((arity-conseq (recur conseq))
-	     (arity-altern (recur altern)))
-	 (unless (= arity-conseq arity-altern)
-	   (error "conditional arity mismatch:" exp))
-	 arity-conseq)))
+       (types-glb (recur-conseq) (recur altern))))
 
    ((and (eq? (car exp) 'lambda) (= (length exp) 3))
     (check-namelist (cadr exp))
