@@ -2,7 +2,7 @@
   (if (not (pair? form)) 'expr
       (case (car form)
 	((& set lambda lambda/ffi
-	    + - * / cons car cdr atom = > >= debug break not)
+	    + - * / cons car cdr atom = > >= debug break =0)
 	 'expr)
 	((ret ret/ffi goto bind seq)
 	 'stmt)
@@ -41,7 +41,7 @@
     (case (car form)
       ((begin)
        (expand-begin (cdr form)))
-      ((ret ret/ffi + - * / cons car cdr atom? = > >= debug break not)
+      ((ret ret/ffi + - * / cons car cdr null? = > >= debug break not)
        `(,(car form) ,(fix-expr-list (map expand (cdr form)))))
       ((&)
        `(& ,@(map expand (cdr form))))
@@ -58,7 +58,7 @@
        (let loop ((predic (expand (cadr form)))
 		  (conseq (expand (caddr form)))
 		  (altern (expand (cadddr form))))
-	 (if (and (pair? predic) (eq? (car predic) 'not))
+	 (if (and (pair? predic) (eq? (car predic) '=0))
 	     (loop (cadr predic altern conseq))
 	     `(if ,predic ,conseq ,altern))))
       ((var rec)
