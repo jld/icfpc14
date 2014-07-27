@@ -183,8 +183,13 @@
     (check-expr (caddr stmt))
     (void))
 
-   ((and (eq? (car stmt) 'seq) (= (length stmt) 3))
+   ((and (eq? (car stmt) 'bind) (= (length stmt) 3))
     (check-bind (cadr stmt))
+    (check-stmt (caddr stmt) ffi?))
+
+   ((and (eq? (car stmt) 'seq) (= (length stmt) 3))
+    (unless (zero? (check-expr (cadr stmt)))
+      (error "expression used for effect only not nullary:" (cadr stmt)))
     (check-stmt (caddr stmt) ffi?))
 
    ((and (eq? (car stmt) 'if) (= (length stmt) 4))
@@ -213,13 +218,17 @@
      (compile-expr block env (caddr stmt))
      (compile-expr block env cc-name)
      (compile-expr block env (cadr stmt))
-     (emit 'tap (+ 1 (check-expr (caddr stmt)))))
+     (emit 'tap (+ 1 (check-expr (caddr stmt))))) ; FIXME: double-traversal
 
-    ((seq)
+    ((bind)
      (let ((>next (block-fork block))
 	   (args (bind-args (cadr stmt))))
-       (compile-bind block >next env)
+       (compile-bind block >next env (cadr stmt))
        (compile-stmt >next (cons args env) (caddr stmt))))
+
+    ((seq)
+     (compile-expr block env (cadr stmt))
+     (compile-stmt block env (caddr stmt)))
 
     ((if)
      (let ((>then (block-fork block))
@@ -237,7 +246,6 @@
     (check-stmt stmt)
     (compile-stmt main env stmt)
     (for-each display (block->strings main #t))))
-
 
 (define (check-bind bind)
   (cond
@@ -262,6 +270,43 @@
 
    (else
     (error "unrecognized binding:" bind))))
+
+(define (bind-args bind)
+  (case (car bind)
+    ((call)
+     (cadr bind))
+    ((var rec)
+     (let loop ((stuff (cdr bind)))
+       (if (null? stuff) '()
+	   (append (car stuff) (loop (cddr stuff))))))
+    (else
+     (error "internal error: unrecognized binding:" bind))))
+
+(define (compile-bind block >next env bind)
+  (define (emit . args) (apply block-emit block args))
+  (case (car bind)
+
+    ((var rec)
+     (let* ((rec? (eq? (car bind) 'rec))
+	    (args (bind-args bind))
+	    (init-env (if rec? (cons args env) env))
+	    (num-args (length args)))
+       (when rec? (emit 'dum num-args))
+       (let loop ((stuff (cdr bind)))
+	 (unless (null? stuff)
+	   (compile-expr block init-env (cadr stuff))
+	   (loop (cddr stuff))))
+       (emit 'ldf >next)
+       (emit (if rec? 'trap 'tap) num-args)))
+
+    ((call)
+     (compile-expr block env (cadddr bind))
+     (emit 'ldf >next)
+     (compile-expr block env (caddr bind))
+     (emit 'tap (+ 1 (check-expr (cadddr bind))))) ; FIXME: double-traversal
+
+    (else
+     (error "internal error: unrecognized binding:" bind))))
 
 
 (define (check-toplevel tl)

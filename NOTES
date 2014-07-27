@@ -93,7 +93,8 @@ e ::= x | C
 
 t ::= (ret e)
     | (goto e e)
-    | (seq b t)
+    | (bind b t)
+    | (seq e t)
     | (if e t t)
 
 b := (var (x*) e ...)
@@ -104,17 +105,9 @@ Expansions:
 * implicit seq and &
 * x => (x) for binder.
 * flattenability for b, for macros.  Maybe just expand to lists?
-* (seq b* t)
+* t ::= (begin (b|e)* t?)
 * (block (x*) t) => (call (x*) (lambda () t))
 ** But then isn't (var (x*) e) => (block (x*) (ret e))?
 *** Yes and no: (var ...) is arity-checked.
-
-(seq (var (xs) e) t)
-; [[e]]; ldf [[t(newenv)]]; tap
-
-(seq (rec (xs) e) t)
-; dum; [[e]]; ldf [[t(newenv)]]; trap
-
-
-(cons (x ...) t)
+* (seq e (ret)) === (ret e)
 
