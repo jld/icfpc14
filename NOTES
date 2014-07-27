@@ -105,7 +105,9 @@ Expansions:
 * implicit seq and &
 * x => (x) for binder.
 * flattenability for b, for macros.  Maybe just expand to lists?
-* t ::= (begin (b|e)* t?)
+* t :+= (begin (b|e)* t?)
+** t :+= (begin (b|e|x)* t?)
+** x ::= (flat (b|e)*)
 * (block (x*) t) => (call (x*) (lambda () t))
 ** But then isn't (var (x*) e) => (block (x*) (ret e))?
 *** Yes and no: (var ...) is arity-checked.
