@@ -189,6 +189,29 @@
   (for/list (((cln b) (in-hash (tcx-clsinfo tcx))))
     (list cln (clsinfo-costs b) (clsinfo-depths b))))
 
+(define (tcx-get-max-depth tcx cln)
+  (foldl max 0 (clsinfo-depths (tcx-get-clsinfo tcx cln))))
+
+(define (tcx-eval-cost tcx cln (depth-map (hasheq)))
+  (let ((depth (hash-ref depth-map cln #f)))
+    (cond 
+     ((and depth (<= depth 0)) ; Deeper than declaration.
+      -inf.0)
+     ((and depth (infinite? depth)) ; Recursion without declaration.
+      +inf.0)
+     (else
+      (let* ((depth (- (or depth (tcx-get-max-depth tcx cln)) 1))
+	     (depth-map (hash-set depth-map cln depth)))
+	(for/fold ((worst 0)) ((cost (in-list (clsinfo-costs (tcx-get-clsinfo tcx cln)))))
+	  (let ((this (for/fold ((acc (car cost))) (((callee times) (in-hash (cdr cost))))
+			(+ acc (* times (tcx-eval-cost tcx callee depth-map))))))
+	    (if (> this worst) this worst))))))))
+
+(define (tcx-eval-all-costs tcx)
+  (for/list (((cln b) (in-hash (tcx-clsinfo tcx))))
+    (list cln (tcx-eval-cost tcx cln))))
+
+
 (define (check-expr tcx exp) ; -> types
   (define (recur exp) (check-expr tcx exp))
 
