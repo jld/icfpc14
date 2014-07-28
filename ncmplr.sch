@@ -81,7 +81,11 @@
 (define (dump-costs tcx)
   (for ((cost (tcx-costs tcx)))
     (printf "; costs[~a] = ~a~n" (car cost) (cadr cost))
-    (printf "; depths[~a] = ~a~n" (car cost) (caddr cost))))
+    (printf "; depths[~a] = ~a~n" (car cost) (caddr cost)))
+  (when #f
+    (printf ";~n")
+    (for ((cost (tcx-eval-all-costs tcx)))
+      (printf "; total-cost[~a] = ~a~n" (car cost) (cadr cost)))))
 
 (define (dump-expr exp (env '()))
   (let ((main (new-block))

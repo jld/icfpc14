@@ -75,26 +75,41 @@
      (call () handle-block 0 wmap0 0)
 
      (var (: lmx int) lmx0 (: lmy int) lmy0 (: here cell) here0)
-     (var (: olmx int) lmx (: olmy int) lmy (: ohere cell) here)
      )
    '((var (wmap lman ghos fruit) (untuple 4 *world*))
      (var (lmvit lmloc lmdir lmliv lmsc) (untuple 5 lman))
      (var ((: new-lmx int) (: new-lmy int)) (unsafe (untuple 2 lmloc)))
 
-     (cond
-      ((and (= new-lmx lmx) (= new-lmy lmy)))
-      ((and (= new-lmx olmx) (= new-lmy olmy))
-       (set lmx olmx) (set lmy olmy) (set here ohere))
-      ((and (= new-lmx lmx0) (= new-lmy lmy0))
-       (set lmx lmx0) (set lmy lmy0) (set here here0))
-      (else (debug #xDEADBEE)))
+     (defun find-it ((: basex int) (: basey int) (: here cell)
+		     (: thatx int) (: thaty int) (: n int))
+       (cond
+	((and (= basex thatx) (= basey thaty))
+	 (ret here))
+	((null? here) (ret 0))
+	((=0 n) (ret 0))
+	(else
+	 (call ((: up cell) (: rt cell) (: dn cell) (: lf cell)) here)
+	 (call (: upthere cell) find-it basex (- basey 1) up thatx thaty (- n 1))
+	 (if (thing? upthere) (ret upthere)
+	     (begin
+	       (call (: rtthere cell) find-it (+ basex 1) basey rt thatx thaty (- n 1))
+	       (if (thing? rtthere) (ret upthere)
+		   (begin
+		     (call (: dnthere cell) find-it basex (+ basey 1) dn thatx thaty (- n 1))
+		     (if (thing? dnthere) (ret dnthere)
+			 (goto find-it (- basex 1) basey lf thatx thaty (- n 1))))))))))
+     
+     (when (and (= new-lmx lmx0) (= new-lmy lmy0))
+       (set (lmx lmy here) lmx0 lmy0 here0))
 
-     (set (olmx olmy ohere) lmx lmy here)
-     (call (hup hrt hdn (: hlf cell) val (: setval cell-poke)) here)
-     (call () setval 1)
-     (if (thing? hlf)
-	 (set (lmx here) (- lmx 1) hlf)
-	 (&))
+     (call (: new-here cell) find-it lmx lmy here new-lmx new-lmy 1)
+     (set (lmx lmy here) new-lmx new-lmy new-here)
+
+     (debug (cons (cons lmx lmy) here))
+
+     (call (_u _r _d _l _v (: set-here cell-poke)) here)
+     (call () set-here 1)
+     
      )
    3
    ))

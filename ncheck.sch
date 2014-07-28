@@ -193,6 +193,8 @@
   (foldl max 0 (clsinfo-depths (tcx-get-clsinfo tcx cln))))
 
 (define (tcx-eval-cost tcx cln (depth-map (hasheq)))
+  ;; This is horrendously inefficient and needs to be fixed.
+  ;; I have a better idea, but no time right now....
   (let ((depth (hash-ref depth-map cln #f)))
     (cond 
      ((and depth (<= depth 0)) ; Deeper than declaration.

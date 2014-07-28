@@ -134,7 +134,7 @@
 	 ;; This is inefficient...
 	 (expand `(call ,vars (class ,cname () ,@body)))))
       ((when)
-       (expand `(block () (if ,(cadr form) (begin ,@(cddr form)) (ret)))))
+       (expand `(if ,(cadr form) (begin ,@(cddr form)) (ret))))
       ((unless)
        (expand `(when (=0 ,(cadr form)) ,@(cddr form))))
 
