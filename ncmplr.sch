@@ -77,6 +77,7 @@
   (let ((main (new-block))
 	(tcx (new-tcx env)))
     (printf "; types = ~a~n" (check-expr tcx exp))
+    (printf "; costs = ~a~n" (tcx-costs tcx))
     (compile-expr main tcx exp)
     (for-each display (block->strings main #t))))
 
@@ -121,11 +122,12 @@
     (else
      (error "internal error: unrecognized statement:" stmt))))
 
-(define (dump-stmt stmt (env '()))
+(define (dump-stmt stmt (env (list (list cc-name))))
   (let ((tcx (new-tcx env))
 	(main (new-block))
 	(cln (gensym)))
     (check-stmt tcx cln stmt)
+    (printf "; costs = ~a~n" (tcx-costs tcx))
     (compile-stmt main tcx stmt)
     (for-each display (block->strings main #t))))
 

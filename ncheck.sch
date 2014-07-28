@@ -9,6 +9,7 @@
       (and (pair? decl) (pair? (cdr decl)) (pair? (cddr decl)) (null? (cdddr decl))
 	   (eq? (car decl) ':) (symbol? (cadr decl)) (type? (caddr decl)))))
 
+
 (define (type-class? type)
   (and (symbol? type)
        (not (memq type '(int lambda _!_)))))
@@ -61,6 +62,7 @@
    ((null? r) l)
    (else (cons (type-glb (car l) (car r)) (types-glb (cdr l) (cdr r))))))
 
+
 (define (env-lookup env var)
   (let floop ((env env) (n 0))
     (when (null? env)
@@ -73,6 +75,7 @@
 
 (define (env-lookup-type env var)
   (let-values (((n i t) (env-lookup env var))) t))
+
 
 (define expr-primops
   (let ()
@@ -96,6 +99,7 @@
 (define primop-out caddr)
 (define primop-insns cdddr)
 
+
 (define (check-namelist nl)
   (unless (list? nl)
     (error "name list isn't a list:" nl))
@@ -111,46 +115,70 @@
 		   (append (reverse (map make-decl ns ts)) nl)))
 	  (loop (cdr nl) (cons n ns) (cons t ts)))))))
 
-(struct tcx (env bounds) #:constructor-name make-tcx)
-(struct bounds (cln al au rl ru) #:mutable #:transparent #:constructor-name make-bounds)
-(define (new-bounds cln) (make-bounds cln '_!_ '() '_!_ '()))
-(define (bounds-check! b)
-  (unless (subtypes? (bounds-al b) (bounds-au b))
-    (error 'bounds-check! "class ~a called with ~a but expects ~a"
-	   (bounds-cln b) (bounds-al b) (bounds-au b)))
-  (unless (subtypes? (bounds-rl b) (bounds-ru b))
-    (error 'bounds-check! "class ~a returns ~a but asked for ~a"
-	   (bounds-cln b) (bounds-rl b) (bounds-ru b))))
+
+(define (cn+ . xs)
+  (let loop ((xs xs) (ipart 0) (hpart (hasheq)))
+    (cond 
+     ((null? xs) (cons ipart hpart))
+     ((integer? (car xs)) (loop (cdr xs) (+ ipart (car xs)) hpart))
+     ((symbol? (car xs))
+      (loop (cdr xs) ipart (hash-update hpart (car xs) (lambda (x) (+ x 1)) 0)))
+     (else
+      (loop (cdr xs) (+ ipart (caar xs))
+	    (for/fold ((nh hpart)) (((n v) (in-hash (cdar xs))))
+	      (hash-update nh n (lambda (x) (+ x v)) 0)))))))
+
+
+(struct tcx (env clsinfo) #:constructor-name make-tcx)
+(struct clsinfo (cln al au rl ru costs)
+	#:mutable #:transparent #:constructor-name make-clsinfo)
+(define (new-clsinfo cln) (make-clsinfo cln '_!_ '() '_!_ '() '()))
+(define (clsinfo-check! b)
+  (unless (subtypes? (clsinfo-al b) (clsinfo-au b))
+    (error 'clsinfo-check! "class ~a called with ~a but expects ~a"
+	   (clsinfo-cln b) (clsinfo-al b) (clsinfo-au b)))
+  (unless (subtypes? (clsinfo-rl b) (clsinfo-ru b))
+    (error 'clsinfo-check! "class ~a returns ~a but asked for ~a"
+	   (clsinfo-cln b) (clsinfo-rl b) (clsinfo-ru b))))
 
 (define (new-tcx env) (make-tcx env (make-hasheq)))
 (define (tcx-nest tcx frame) (make-tcx (cons frame (tcx-env tcx))
-				       (tcx-bounds tcx)))
+				       (tcx-clsinfo tcx)))
 (define (tcx-ref tcx id) (env-lookup-type (tcx-env tcx) id))
-(define (tcx-get-bounds tcx cln)
-  (hash-ref! (tcx-bounds tcx) cln (lambda () (new-bounds cln))))
+(define (tcx-get-clsinfo tcx cln)
+  (hash-ref! (tcx-clsinfo tcx) cln (lambda () (new-clsinfo cln))))
 
-(define (bounds-note-class! b atys)
-  (set-bounds-au! b (types-glb (bounds-au b) atys))
-  (bounds-check! b))
-(define (bounds-note-ret! b rtys)
-  (set-bounds-rl! b (types-lub (bounds-rl b) rtys))
-  (bounds-check! b))
-(define (bounds-note-call! b atys rtys)
-  (set-bounds-al! b (types-lub (bounds-al b) atys))
-  (set-bounds-ru! b (types-glb (bounds-ru b) rtys))
-  (bounds-check! b))
+(define (clsinfo-note-class! b atys)
+  (set-clsinfo-au! b (types-glb (clsinfo-au b) atys))
+  (clsinfo-check! b))
+(define (clsinfo-note-ret! b rtys)
+  (set-clsinfo-rl! b (types-lub (clsinfo-rl b) rtys))
+  (clsinfo-check! b))
+(define (clsinfo-note-call! b atys rtys)
+  (set-clsinfo-al! b (types-lub (clsinfo-al b) atys))
+  (set-clsinfo-ru! b (types-glb (clsinfo-ru b) rtys))
+  (clsinfo-check! b))
 
 (define (tcx-note-class! tcx cln atys)
-  (bounds-note-class! (tcx-get-bounds tcx cln) atys))
+  (clsinfo-note-class! (tcx-get-clsinfo tcx cln) atys))
 (define (tcx-note-ret! tcx cln rtys)
-  (bounds-note-ret! (tcx-get-bounds tcx cln) rtys))
+  (clsinfo-note-ret! (tcx-get-clsinfo tcx cln) rtys))
 (define (tcx-note-call! tcx cln atys rtys)
-  (bounds-note-call! (tcx-get-bounds tcx cln) atys rtys))
+  (clsinfo-note-call! (tcx-get-clsinfo tcx cln) atys rtys))
 (define (tcx-note-goto! tcx fcln tcln atys)
-  (let ((bf (tcx-get-bounds tcx fcln))
-	(bt (tcx-get-bounds tcx tcln)))
-    (bounds-note-call! bt atys (bounds-ru bf))
-    (bounds-note-ret! bf (bounds-rl bt))))
+  (let ((bf (tcx-get-clsinfo tcx fcln))
+	(bt (tcx-get-clsinfo tcx tcln)))
+    (clsinfo-note-call! bt atys (clsinfo-ru bf))
+    (clsinfo-note-ret! bf (clsinfo-rl bt))))
+
+(define (clsinfo-note-cost! b cost)
+  (set-clsinfo-costs! b (cons cost (clsinfo-costs b))))
+(define (tcx-note-cost! tcx cln cost)
+  (when cln (clsinfo-note-cost! (tcx-get-clsinfo tcx cln) cost)))
+
+(define (tcx-costs tcx)
+  (for/list (((cln b) (in-hash (tcx-clsinfo tcx))))
+    (list cln (clsinfo-costs b))))
 
 (define (check-expr tcx exp) ; -> types
   (define (recur exp) (check-expr tcx exp))
@@ -219,7 +247,7 @@
     (error "unrecognized expression:" exp))))
 
 
-(define (check-stmt tcx cln stmt)
+(define (check-stmt tcx cln stmt (cost (cn+)))
   (cond
    ((or (null? stmt) (not (list? stmt)))
     (error "unrecognized statement:" stmt))
@@ -227,11 +255,15 @@
    ((and (eq? (car stmt) 'ret) (= (length stmt) 2))
     (unless cln
       (error "not allowed in a lambda:" stmt))
-    (tcx-note-ret! tcx cln (check-expr tcx (cadr stmt))))
+    (let ((exp (cadr stmt)))
+      (tcx-note-ret! tcx cln (check-expr tcx (cadr stmt)))
+      (tcx-note-cost! tcx cln (cn+ cost (expr-cost exp) 2))))
 
    ((and (eq? (car stmt) 'halt) (= (length stmt) 2))
-    (check-expr tcx (cadr stmt))
-    (void))
+    ;; TODO: recover lambdas' costs somehow
+    (let ((exp (cadr stmt)))
+      (check-expr tcx exp)
+      (tcx-note-cost! tcx cln (cn+ cost (expr-cost exp) 1))))
 
    ((and (eq? (car stmt) 'goto) (= (length stmt) 3))
     (unless cln
@@ -240,27 +272,34 @@
 	  (etys (check-expr tcx (caddr stmt))))
       (unless (and (= (length ftys) 1) (type-class? (car ftys)))
 	(error "not a class instance:" (cadr stmt)))
-      (tcx-note-goto! tcx cln (car ftys) etys)))
+      (let ((callee (car ftys)))
+	(tcx-note-goto! tcx cln callee etys)
+	(tcx-note-cost! tcx cln (cn+ cost (expr-cost (cadr stmt)) 
+				     (expr-cost (caddr stmt)) 2 callee)))))
 
    ((and (eq? (car stmt) 'bind) (= (length stmt) 3))
-    (check-stmt (check-bind tcx (cadr stmt)) cln (caddr stmt)))
+    (let-values (((new-tcx bind-cost)
+		  (check-bind tcx (cadr stmt))))
+      (check-stmt new-tcx cln (caddr stmt) (cn+ cost bind-cost))))
 
    ((and (eq? (car stmt) 'seq) (= (length stmt) 3))
-    (unless (null? (check-expr tcx (cadr stmt)))
-      (error "non-nullary expression used for effect only:" (cadr stmt)))
-    (check-stmt tcx (caddr stmt) cln))
+    (let ((exp (cadr stmt)))
+      (unless (null? (check-expr tcx exp))
+	(error "non-nullary expression used for effect only:" (cadr stmt)))
+      (check-stmt tcx cln (caddr stmt) (cn+ cost (expr-cost exp)))))
 
    ((and (eq? (car stmt) 'if) (= (length stmt) 4))
     (unless (subtypes? (check-expr tcx (cadr stmt)) '(int))
       (error "condition guard is not an int in" stmt))
-    (check-stmt tcx cln (caddr stmt))
-    (check-stmt tcx cln (cadddr stmt)))
+    (let ((cost (cn+ cost (expr-cost (cadr stmt)) 1)))
+      (check-stmt tcx cln (caddr stmt) cost)
+      (check-stmt tcx cln (cadddr stmt) cost)))
 
    (else
     (error "unrecognized statement:" stmt))))
 
 
-(define (check-bind tcx bind) ; -> tcx'
+(define (check-bind tcx bind) ; -> tcx' cost
   (cond
    ((or (null? bind) (not (list? bind)))
     (error "unrecognized binding:" bind))
@@ -286,7 +325,10 @@
 	  (let ((etys (check-expr (if rec? new-tcx tcx) expr)))
 	    (unless (subtypes? etys vtys)
 	      (error "type mismatch in binding:" bind))))
-	new-tcx)))
+	(values
+	 new-tcx
+	 (apply cn+ (if rec? 3 2)
+		(map expr-cost exprs))))))
 
    ((and (eq? (car bind) 'call) (= (length bind) 4))
     (let ((vtys (check-namelist (cadr bind)))
@@ -295,7 +337,12 @@
       (unless (and (= (length ftys) 1) (type-class? (car ftys)))
 	(error "not a class instance:" (caddr bind)))
       (tcx-note-call! tcx (car ftys) etys vtys)
-      (tcx-nest tcx (cadr bind))))
+      (values
+       (tcx-nest tcx (cadr bind))
+       (cn+ (expr-cost (caddr bind))
+	    (expr-cost (cadddr bind))
+	    2
+	    (car ftys)))))
 
    (else
     (error "unrecognized binding:" bind))))
