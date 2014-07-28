@@ -74,7 +74,7 @@
 
      (call () handle-block 0 wmap0 0)
 
-     (var (: lmx int) lmx0 (: lmy int) lmy0 (: here cell) here0)
+     (var (: lmx int) lmx0 (: lmy int) lmy0 (: here cell) here0 (: depth int) 5)
      )
    `((var (wmap lman ghos fruit) (untuple 4 *world*))
      (var (lmvit lmloc lmdir lmliv lmsc) (untuple 5 lman))
@@ -133,13 +133,17 @@
 
      ; Wat.
      (var (: lmdir int) (unsafe lmdir))
-     (when (<= lmdir 0) (call () dfs-up up 0 10))
-     (when (<= lmdir 1) (call () dfs-rt rt 1 10))
-     (when (<= lmdir 2) (call () dfs-dn dn 2 10))
-     (when (<= lmdir 3) (call () dfs-lf lf 3 10))
-     (when (> lmdir 0) (call () dfs-up up 0 10))
-     (when (> lmdir 1) (call () dfs-rt rt 1 10))
-     (when (> lmdir 2) (call () dfs-dn dn 2 10))
+     (when (<= lmdir 0) (call () dfs-up up 0 depth))
+     (when (<= lmdir 1) (call () dfs-rt rt 1 depth))
+     (when (<= lmdir 2) (call () dfs-dn dn 2 depth))
+     (when (<= lmdir 3) (call () dfs-lf lf 3 depth))
+     (when (> lmdir 0) (call () dfs-up up 0 depth))
+     (when (> lmdir 1) (call () dfs-rt rt 1 depth))
+     (when (> lmdir 2) (call () dfs-dn dn 2 depth))
+
+     (if (<= bestn 0)
+	 (set depth (+ depth 1))
+	 (set depth (if (<= depth 5) depth (- depth 1))))
      )
    'bestdir
    ))
