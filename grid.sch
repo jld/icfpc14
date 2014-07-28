@@ -31,7 +31,7 @@
   (stateless
    `((var (wmap0 lman0 ghos0 fruit0) (untuple 4 *initial-world*))
      (var (lmvit0 lmloc0 lmdir0 lmliv0 lmsc0) (untuple 5 lman0))
-     (var (: here cell) 0)
+     (var (: here0 cell) 0)
      (var ((: lmx0 int) (: lmy0 int)) (unsafe (untuple 2 lmloc0)))
 
      (defun revappend (l1 l2) ,8bit
@@ -49,7 +49,7 @@
 		    (if cellval
 			,(make-cell 'cellval)
 			(ret 0 0)))
-	     (if (= x lmx0) (if (= y lmy0) (set here this-cell) (&)) (&))
+	     (if (= x lmx0) (if (= y lmy0) (set here0 this-cell) (&)) (&))
 	     (when (thing? this-cell)
 	       (when (thing? left-cell)
 		 (call () this-link ,dir-lf left-cell)
@@ -74,22 +74,27 @@
 
      (call () handle-block 0 wmap0 0)
 
-     (defun splat ((: n int) (: c cell))
-       (if (=0 n) (ret)
-	   (if (null? c) (begin (debug 0))
-	       (begin
-		 (debug 1111111)
-		 (call ((: up cell) (: rt cell) (: dn cell) (: lf cell) val) c)
-		 (debug val)
-		 (call () splat (- n 1) up)
-		 (call () splat (- n 1) rt)
-		 (call () splat (- n 1) dn)
-		 (call () splat (- n 1) lf)
-		 (debug 2222222)))))
-     (call () splat 4 here)
-
+     (var (: lmx int) lmx0 (: lmy int) lmy0 (: here cell) here0)
+     (var (: olmx int) lmx (: olmy int) lmy (: ohere cell) here)
      )
-   '() ;; later...
+   '((var (wmap lman ghos fruit) (untuple 4 *world*))
+     (var (lmvit lmloc lmdir lmliv lmsc) (untuple 5 lman))
+     (var ((: new-lmx int) (: new-lmy int)) (unsafe (untuple 2 lmloc)))
 
+     (cond
+      ((and (= new-lmx lmx) (= new-lmy lmy)))
+      ((and (= new-lmx olmx) (= new-lmy olmy))
+       (set lmx olmx) (set lmy olmy) (set here ohere))
+      ((and (= new-lmx lmx0) (= new-lmy lmy0))
+       (set lmx lmx0) (set lmy lmy0) (set here here0))
+      (else (debug #xDEADBEE)))
+
+     (set (olmx olmy ohere) lmx lmy here)
+     (call (hup hrt hdn (: hlf cell) val (: setval cell-poke)) here)
+     (call () setval 1)
+     (if (thing? hlf)
+	 (set (lmx here) (- lmx 1) hlf)
+	 (&))
+     )
    3
    ))

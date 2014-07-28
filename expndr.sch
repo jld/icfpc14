@@ -22,9 +22,9 @@
 	  ((expr) `(seq ,t0 ,(expand-begin (cdr things))))
 	  ((bind) `(bind ,t0 ,(expand-begin (cdr things))))
 	  ((stmt)
-	   (unless (null? (cdr things))
-	     (error "premature end of begin:" `(begin ,@things)))
-	   t0)
+	   (if (null? (cdr things)) t0
+	       `(bind (call () (class ,(gensym 'block) () ,t0) (&))
+		      ,(expand-begin (cdr things)))))
 	  (else
 	   (case (car t0)
 	     ((flatten) (expand-begin (append (cdr t0) (cdr things))))
@@ -137,6 +137,25 @@
        (expand `(block () (if ,(cadr form) (begin ,@(cddr form)) (ret)))))
       ((unless)
        (expand `(when (=0 ,(cadr form)) ,@(cddr form))))
+
+      ((cond)
+       (cond
+	((null? (cdr form)) '(ret))
+	((eq? (caadr form) 'else)
+	 (expand `(begin ,@(cdadr form))))
+	(else (expand `(if ,(caadr form)
+			   (begin ,@(cdadr form))
+			   (cond ,@(cddr form)))))))
+      ((and)
+       (cond
+	((null? (cdr form)) 1)
+	((null? (cddr form)) (expand (cadr form)))
+	(else (expand `(if ,(cadr form) (and ,@(cddr form)) 0)))))
+      ((or)
+       (cond
+	((null? (cdr form)) 0)
+	((null? (cddr form)) (expand (cadr form)))
+	(else (expand `(if ,(cadr form) 1 (or ,@(cddr form)))))))
 
       (else
        (error "unexpanded form" form))
