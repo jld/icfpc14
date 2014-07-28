@@ -120,16 +120,16 @@
 		      (call ((: up cell) (: rt cell) (: dn cell) (: lf cell) (: v int)) loc)
 		      (var (: faken int) (* n (if (< v 4) (- v 1) 0)))
 		      (if (> faken bestn)
-			  (ret (set (bestdir bestn) odir faken))
-			  (begin
-			    ,@(for/list ((fn2 '(dfs-up dfs-rt dfs-dn dfs-lf))
-					 (no '(dfs-dn dfs-lf dfs-up dfs-rt))
-					 (dir '(up rt dn lf))
-					 #:unless (eq? fn no))
-				;; Last one should be a goto.
-				;; Sure is a shame we're not in a language where that's automatic
-				;; anymore....  (Oops.)
-				`(call () ,fn2 ,dir odir (- n 1))))))))))
+			  (set (bestdir bestn) odir faken)
+			  (&))
+		      ,@(for/list ((fn2 '(dfs-up dfs-rt dfs-dn dfs-lf))
+				   (no '(dfs-dn dfs-lf dfs-up dfs-rt))
+				   (dir '(up rt dn lf))
+				   #:unless (eq? fn no))
+			  ;; Last one should be a goto.
+			  ;; Sure is a shame we're not in a language where that's automatic
+			  ;; anymore....  (Oops.)
+			  `(call () ,fn2 ,dir odir (- n 1))))))))
 
      ; Wat.
      (var (: lmdir int) (unsafe lmdir))
