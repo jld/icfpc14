@@ -1,7 +1,12 @@
 So I spent most of my time playing with language ideas for the
 Lambda-Man CPU.  I started with a fairly plain Lisp (see below), but
-wound up with something... stranger.  (The `.sch` files are in Racket,
-with regrettable code style.)  Notes about that:
+wound up with something... stranger.  Notes about that:
+
+* The `.sch` files are Racket; among the regrettable code style
+  choices is not using modules and just `load`ing everything.  (In
+  particular, this leads to some fun where Racket's actual macro
+  expander's `expand` sometimes fails to be shadowed by my `expand`
+  and I have to `load` the file again.)
 
 * The basic pipeline is an expander for derived forms in `expndr.sch`,
   a syntax checker / type checker / time bound estimator in
@@ -51,6 +56,9 @@ with regrettable code style.)  Notes about that:
 * There are more notes in `NOTES`, but they're kind of
   stream-of-consciousness notes to myself (and occasional fragmentary
   to-do lists) and may or may not make any actual sense.
+
+* Yes, I really	did do all my testing by piping to `xclip` and pasting
+  into the web forms: `(xclip-toplevel (expand gridbot0))`.
 
 The bot:
 
