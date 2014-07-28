@@ -1,4 +1,4 @@
-(load "ncheck.sch") ;; FIXME
+(load "ncheck.rkt") ;; FIXME
 
 (define (classify-core-form form)
   (if (not (pair? form)) 'expr

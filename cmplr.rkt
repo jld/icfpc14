@@ -1,4 +1,4 @@
-(load "block.sch") ;; FIXME
+(load "block.rkt") ;; FIXME
 
 (define cmplr-ndebug (make-parameter #f))
 
