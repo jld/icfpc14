@@ -2,16 +2,16 @@ So I spent most of my time playing with language ideas for the
 Lambda-Man CPU.  I started with a fairly plain Lisp (see below), but
 wound up with something... stranger.  Notes about that:
 
-* The `.sch` files are Racket; among the regrettable code style
+* The `.rkt` files are Racket; among the regrettable code style
   choices is not using modules and just `load`ing everything.  (In
   particular, this leads to some fun where Racket's actual macro
   expander's `expand` sometimes fails to be shadowed by my `expand`
   and I have to `load` the file again.)
 
-* The basic pipeline is an expander for derived forms in `expndr.sch`,
+* The basic pipeline is an expander for derived forms in `expndr.rkt`,
   a syntax checker / type checker / time bound estimator in
-  `ncheck.sch`, and the compiler in `ncmplr.sch`.  Code written in the
-  language is in `nexamples.sch` and `grid.sch`, especially `gridbot0`.
+  `ncheck.rkt`, and the compiler in `ncmplr.rkt`.  Code written in the
+  language is in `nexamples.rkt` and `grid.rkt`, especially `gridbot0`.
 
 * The form named `class` is basically a lambda with a name, which is
   effectively a nominal type, the meaning of which is collected via
@@ -78,13 +78,13 @@ The ghost:
 
 The old language:
 
-* `cmplr.sch`, which compiles a tiny Lisp dialect (mostly Scheme-like
+* `cmplr.rkt`, which compiles a tiny Lisp dialect (mostly Scheme-like
    naming rather than CL, but Lisp-2) into code for the Lambda-Man
    CPU.  The host language is Racket (but I haven't yet bothered with
    using modules instead of just `load`ing into a REPL -- among other
    questionable code style choices).
 
-* `examples.sch`, which is where the currently extant AIs are.
+* `examples.rkt`, which is where the currently extant AIs are.
   `simplesearch` is the best (least bad?) one I've written so far.
 
 * `NOTES`, where I have a bunch of notes to myself about ideas I

@@ -1,5 +1,5 @@
-(load "block.sch") ;; FIXME
-(load "ncheck.sch") ;; FIXME
+(load "block.rkt") ;; FIXME
+(load "ncheck.rkt") ;; FIXME
 
 (define cc-name '*continuation*)
 
