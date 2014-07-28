@@ -44,6 +44,7 @@
    ((not (pair? form)) form)
    (else
     (case (car form)
+      ;; Core (and core-ish) forms:
       ((begin)
        (expand-begin (cdr form)))
       ((ret halt + - * / cons car cdr null? = > >= debug break =0)
@@ -80,6 +81,18 @@
 	      ,(expand (caddr form))
 	      ,(fix-expr-list (map expand (cdddr form)))))
       
+      ;; Macro-like things:
+      ((defun)
+       (let ((name (cadr form)) (args (caddr form)) (body (cdddr form)))
+	 (let ((cname (gensym name)))
+	   `(rec ((: ,name ,cname)) (class ,cname ,(fix-decl-list args) ,(expand-begin body))))))
+
+      ;; Fake primitives:
+      ((<) (expand `(=0 (>= ,@(cdr form)))))
+      ((<=) (expand `(=0 (> ,@(cdr form)))))
+      ((<>) (expand `(=0 (= ,@(cdr form)))))
+      ((thing?) (expand `(=0 (null? ,@(cdr form)))))
+
       (else
        (error "unexpanded form" form))
      ))))

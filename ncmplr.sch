@@ -113,7 +113,6 @@
 	(main (new-block))
 	(cln (gensym)))
     (check-stmt tcx cln stmt)
-    (printf "; clsinfo = ~a~n" (tcx-get-bounds tcx cln))
     (compile-stmt main tcx stmt)
     (for-each display (block->strings main #t))))
 
