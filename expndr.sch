@@ -6,7 +6,7 @@
 	((& set lambda class
 	    + - * / cons car cdr atom = > >= debug break =0)
 	 'expr)
-	((ret halt goto bind seq)
+	((ret halt goto bind seq declaring)
 	 'stmt)
 	((var rec call)
 	 'bind)
@@ -26,9 +26,14 @@
 	     (error "premature end of begin:" `(begin ,@things)))
 	   t0)
 	  (else
-	   (unless (eq? (car t0) 'flatten)
-	     (error "unknown expanded begin item:" t0))
-	   (expand-begin (append (cdr t0) (cdr things))))))))
+	   (case (car t0)
+	     ((flatten) (expand-begin (append (cdr t0) (cdr things))))
+	     ((declare)
+	      (if (null? (cdr t0)) (expand-begin (cdr things))
+		  (expand `(declaring ,(cadr t0) (begin (declare ,@(cddr t0))
+							,@(cdr things))))))
+	     (else (error "unknown expanded begin item:" t0))))))))
+
 
 (define (fix-expr-list el)
   (if (= (length el) 1) (car el) `(& ,@el)))
@@ -80,7 +85,11 @@
        `(call ,(fix-decl-list (cadr form))
 	      ,(expand (caddr form))
 	      ,(fix-expr-list (map expand (cdddr form)))))
-      
+      ((declaring)
+       `(declaring ,(cadr form) ,(expand-begin (cddr form))))
+      ((declare)
+       form)
+
       ;; Macro-like things:
       ((defun)
        (let ((name (cadr form)) (args (caddr form)) (body (cdddr form)))

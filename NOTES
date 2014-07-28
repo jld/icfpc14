@@ -104,6 +104,7 @@ s ::= (ret e)
     | (bind b s)
     | (seq e s)
     | (if e s s)
+    | (declaring any s)
 
 b := (var (x*) e ...)
    | (rec (x*) e ...)

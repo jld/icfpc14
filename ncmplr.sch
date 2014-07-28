@@ -73,11 +73,16 @@
    ((eq? (car exp) 'if)
     (expr-arity (caddr exp)))))
 
+(define (dump-costs tcx)
+  (for ((cost (tcx-costs tcx)))
+    (printf "; costs[~a] = ~a~n" (car cost) (cadr cost))
+    (printf "; depths[~a] = ~a~n" (car cost) (caddr cost))))
+
 (define (dump-expr exp (env '()))
   (let ((main (new-block))
 	(tcx (new-tcx env)))
     (printf "; types = ~a~n" (check-expr tcx exp))
-    (printf "; costs = ~a~n" (tcx-costs tcx))
+    (dump-costs tcx)
     (compile-expr main tcx exp)
     (for-each display (block->strings main #t))))
 
@@ -119,6 +124,9 @@
        (compile-stmt >then tcx (caddr stmt))
        (compile-stmt >else tcx (cadddr stmt))))
 
+    ((declaring)
+     (compile-stmt block tcx (caddr stmt)))
+
     (else
      (error "internal error: unrecognized statement:" stmt))))
 
@@ -127,7 +135,7 @@
 	(main (new-block))
 	(cln (gensym)))
     (check-stmt tcx cln stmt)
-    (printf "; costs = ~a~n" (tcx-costs tcx))
+    (dump-costs tcx)
     (compile-stmt main tcx stmt)
     (for-each display (block->strings main #t))))
 
@@ -177,6 +185,6 @@
   (let ((main (new-block))
 	(tcx (new-tcx env)))
     (check-toplevel tcx tl)
-    (printf "; costs = ~a~n" (tcx-costs tcx))
+    (dump-costs tcx)
     (compile-toplevel main tcx tl)
     (for-each display (block->strings main #t))))

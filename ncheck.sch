@@ -129,9 +129,9 @@
 	      (hash-update nh n (lambda (x) (+ x v)) 0)))))))
 
 
-(struct clsinfo (cln al au rl ru costs)
+(struct clsinfo (cln al au rl ru costs depths)
 	#:mutable #:transparent #:constructor-name make-clsinfo)
-(define (new-clsinfo cln) (make-clsinfo cln '_!_ '() '_!_ '() '()))
+(define (new-clsinfo cln) (make-clsinfo cln '_!_ '() '_!_ '() '() '()))
 (define (clsinfo-check! b)
   (unless (subtypes? (clsinfo-al b) (clsinfo-au b))
     (error 'clsinfo-check! "class ~a called with ~a but expects ~a"
@@ -152,6 +152,7 @@
   (hash-ref! (tcx-clsinfo tcx) cln (lambda () (new-clsinfo cln))))
 
 (define (clsinfo-note-class! b atys)
+  (set-clsinfo-depths! b (cons +inf.0 (clsinfo-depths b)))
   (set-clsinfo-au! b (types-glb (clsinfo-au b) atys))
   (clsinfo-check! b))
 (define (clsinfo-note-ret! b rtys)
@@ -177,11 +178,16 @@
 (define (clsinfo-note-cost! b cost)
   (set-clsinfo-costs! b (cons cost (clsinfo-costs b))))
 (define (tcx-note-cost! tcx cln cost)
-  (when cln (clsinfo-note-cost! (tcx-get-clsinfo tcx cln) cost)))
+  (clsinfo-note-cost! (tcx-get-clsinfo tcx cln) cost))
+
+(define (clsinfo-note-depth! b depth)
+  (set-clsinfo-depths! b (cons depth (cdr (clsinfo-depths b)))))
+(define (tcx-note-depth! tcx cln depth)
+  (clsinfo-note-depth! (tcx-get-clsinfo tcx cln) depth))
 
 (define (tcx-costs tcx)
   (for/list (((cln b) (in-hash (tcx-clsinfo tcx))))
-    (list cln (clsinfo-costs b))))
+    (list cln (clsinfo-costs b) (clsinfo-depths b))))
 
 (define (check-expr tcx exp) ; -> types
   (define (recur exp) (check-expr tcx exp))
@@ -296,6 +302,12 @@
     (let ((cost (cn+ cost (expr-cost (cadr stmt)) 1)))
       (check-stmt tcx cln (caddr stmt) cost)
       (check-stmt tcx cln (cadddr stmt) cost)))
+
+   ((and (eq? (car stmt) 'declaring) (= (length stmt) 3))
+    (case (caadr stmt)
+      ((max-depth)
+       (tcx-note-depth! tcx cln (cadadr stmt))))
+    (check-stmt tcx cln (caddr stmt) cost))
 
    (else
     (error "unrecognized statement:" stmt))))
