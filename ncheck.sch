@@ -129,7 +129,6 @@
 	      (hash-update nh n (lambda (x) (+ x v)) 0)))))))
 
 
-(struct tcx (env clsinfo) #:constructor-name make-tcx)
 (struct clsinfo (cln al au rl ru costs)
 	#:mutable #:transparent #:constructor-name make-clsinfo)
 (define (new-clsinfo cln) (make-clsinfo cln '_!_ '() '_!_ '() '()))
@@ -141,10 +140,14 @@
     (error 'clsinfo-check! "class ~a returns ~a but asked for ~a"
 	   (clsinfo-cln b) (clsinfo-rl b) (clsinfo-ru b))))
 
-(define (new-tcx env) (make-tcx env (make-hasheq)))
+(struct tcx (env clsinfo lctr) #:constructor-name make-tcx)
+(define (new-tcx env) (make-tcx env (make-hasheq) (box 0)))
 (define (tcx-nest tcx frame) (make-tcx (cons frame (tcx-env tcx))
-				       (tcx-clsinfo tcx)))
+				       (tcx-clsinfo tcx)
+				       (tcx-lctr tcx)))
 (define (tcx-ref tcx id) (env-lookup-type (tcx-env tcx) id))
+(define (tcx-lambda-number tcx)
+  (let* ((b (tcx-lctr tcx)) (n (unbox b))) (set-box! b (+ n 1)) n))
 (define (tcx-get-clsinfo tcx cln)
   (hash-ref! (tcx-clsinfo tcx) cln (lambda () (new-clsinfo cln))))
 
@@ -221,7 +224,7 @@
 
    ((and (eq? (car exp) 'lambda) (= (length exp) 3))
     (check-namelist (cadr exp))
-    (check-stmt (tcx-nest tcx (cadr exp)) #f (caddr exp))
+    (check-stmt (tcx-nest tcx (cadr exp)) (tcx-lambda-number tcx) (caddr exp))
     '(lambda))
 
    ((and (eq? (car exp) 'class) (= (length exp) 4))
@@ -253,20 +256,19 @@
     (error "unrecognized statement:" stmt))
 
    ((and (eq? (car stmt) 'ret) (= (length stmt) 2))
-    (unless cln
+    (unless (symbol? cln)
       (error "not allowed in a lambda:" stmt))
     (let ((exp (cadr stmt)))
       (tcx-note-ret! tcx cln (check-expr tcx (cadr stmt)))
       (tcx-note-cost! tcx cln (cn+ cost (expr-cost exp) 2))))
 
    ((and (eq? (car stmt) 'halt) (= (length stmt) 2))
-    ;; TODO: recover lambdas' costs somehow
     (let ((exp (cadr stmt)))
       (check-expr tcx exp)
       (tcx-note-cost! tcx cln (cn+ cost (expr-cost exp) 1))))
 
    ((and (eq? (car stmt) 'goto) (= (length stmt) 3))
-    (unless cln
+    (unless (symbol? cln)
       (error "not allowed in a lambda:" stmt))
     (let ((ftys (check-expr tcx (cadr stmt)))
 	  (etys (check-expr tcx (caddr stmt))))
@@ -349,5 +351,5 @@
 
 
 (define (check-toplevel tcx tl)
-  (check-stmt tcx #f tl))
+  (check-stmt tcx (tcx-lambda-number tcx) tl))
 
