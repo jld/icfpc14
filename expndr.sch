@@ -52,7 +52,7 @@
       ;; Core (and core-ish) forms:
       ((begin)
        (expand-begin (cdr form)))
-      ((ret halt + - * / cons car cdr null? = > >= debug break =0)
+      ((ret halt + - * / cons car cdr null? = > >= debug break =0 unsafe)
        `(,(car form) ,(fix-expr-list (map expand (cdr form)))))
       ((&)
        `(& ,@(map expand (cdr form))))
@@ -95,6 +95,30 @@
        (let ((name (cadr form)) (args (caddr form)) (body (cdddr form)))
 	 (let ((cname (gensym name)))
 	   `(rec ((: ,name ,cname)) (class ,cname ,(fix-decl-list args) ,(expand-begin body))))))
+
+      ((untuple)
+       ; Be careful with this; it duplicates the expression.
+       (let ((n (cadr form)))
+	 (unless (and (integer? n) (> n 0))
+	   (error "untuple needs a static positive integer"))
+	 `(& ,@(let loop ((n n) (exp (fix-expr-list (map expand (cddr form)))))
+		 (if (= n 1) `(,exp)
+		     `((car ,exp)
+		       ,@(loop (- n 1) `(cdr ,exp))))))))
+      ((tuple)
+       (expand
+	(let loop ((args (cdr form)))
+	  (cond
+	   ((null? args) (error "0-tuples don't exist"))
+	   ((null? (cdr args)) (car args))
+	   (else `(cons ,(car args) (tuple ,@(cdr args))))))))
+
+      ((!nth)
+       (let ((n (cadr form)))
+	 (unless (integer? n)
+	   (error "!nth needs a static integer"))
+	 (if (zero? n) (expand `(car ,@(cddr form)))
+	     (expand `(!nth ,(- n 1) (cdr ,@(cddr form)))))))
 
       ;; Fake primitives:
       ((<) (expand `(=0 (>= ,@(cdr form)))))

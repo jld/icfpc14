@@ -232,6 +232,8 @@
       (let* ((arg (cadr exp))
 	     (given (recur arg))
 	     (needed (primop-in opinfo)))
+	(unless (= (length given) (length needed))
+	  (error "operator arity mismatch:" exp needed))
 	(unless (subtypes? given needed)
 	  (error "operator type mismatch:" exp needed))
 	(primop-out opinfo))))
@@ -266,7 +268,7 @@
 	(check-stmt (tcx-nest tcx frame) cln (cadddr exp)))
       (list cln)))
 
-   ((and (eq? (car exp) 'set) (list? exp) (= (length exp) 3))
+   ((and (eq? (car exp) 'set) (= (length exp) 3))
     (let* ((vars (cadr exp))
 	   (init (caddr exp))
 	   (vtys (map (lambda (v) (tcx-ref tcx v)) vars))
@@ -275,9 +277,36 @@
 	(error "mutation type mismatch:" vtys exp))
       '()))
 
+   ((and (eq? (car exp) 'unsafe) (= (length exp) 2))
+    (for/list ((ty (in-list (recur (cadr exp))))) '_!_))
+
    (else
     (error "unrecognized expression:" exp))))
 
+
+(define (expr-cost exp (join? #f))
+  (cond
+   ((or (integer? exp)
+	(symbol? exp)
+	(memq (car exp) '(class lambda))) 1)
+   ((eq? (car exp) '&)
+    (for/sum ((exp (cdr exp))) (expr-cost exp)))
+   ((assq (car exp) expr-primops) =>
+    (lambda (opinfo)
+      (+ (expr-cost (cadr exp))
+	 (length (primop-insns opinfo)))))
+   ((eq? (car exp) 'set)
+    (+ (length (cadr exp))
+       (expr-cost (caddr exp))))
+   ((eq? (car exp) 'if)
+    (+ (if join? 1 2)
+       (expr-cost (cadr exp))
+       (max (expr-cost (caddr exp) #t)
+	    (expr-cost (cadddr exp) #t))))
+   ((eq? (car exp) 'unsafe)
+    (expr-cost (cadr exp) join?))
+   (else
+    (error "internal error: unrecognized expression:" exp))))
 
 (define (check-stmt tcx cln stmt (cost (cn+)))
   (cond

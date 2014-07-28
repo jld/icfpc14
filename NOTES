@@ -154,3 +154,23 @@ I HATE LATTICE THEORY.
 2. cls, (lam)
 3. int
 4. _|_
+
+
+I have all these ideas for how to make the language/analyses nicer... but now I need code.
+
+TODO:
+1. Translate the old bot; measure it.
+2. Do the linked grid thing; check if it:
+2a. works; search around self
+2b. track self (then clear pill bits)
+2c. track ghosts (maybe later; mark in square)
+2c*. note that ghosts can step twice between two of LM's moves
+2c&. depth-2 DFS should work
+3. BFS idea
+3a. Subclasses for last direction.
+3b. Internal tailq.
+3c. Store turn number so staleness obvious.
+4. Deciding which way to go:
+4a. Keep score by direction; stop if ghost.
+4b. Is it even worth keeping the BFS from duplicating work?
+4b*. Yes, but not at the expense of, say, tracking ghosts.

@@ -55,6 +55,9 @@
 	 (for ((var (reverse vars)))
 	   (env-access tcx emit 'st var))))
 
+      ((unsafe)
+       (compile-expr block tcx (cadr exp) join?))
+
       (else
        (error "internal error: unrecognized expression:" exp)))))
 
@@ -71,7 +74,9 @@
     (lambda (opinfo) (length (primop-out opinfo))))
    ((eq? (car exp) 'set) 0)
    ((eq? (car exp) 'if)
-    (expr-arity (caddr exp)))))
+    (expr-arity (caddr exp)))
+   ((eq? (car exp) 'unsafe)
+    (expr-arity (cadr exp)))))
 
 (define (dump-costs tcx)
   (for ((cost (tcx-costs tcx)))
@@ -101,8 +106,8 @@
      (emit 'rtn))
 
     ((goto)
-     (compile-expr block tcx (caddr stmt))
      (env-access tcx emit 'ld cc-name)
+     (compile-expr block tcx (caddr stmt))
      (compile-expr block tcx (cadr stmt))
      (emit 'tap (+ 1 (expr-arity (caddr stmt)))))
 
@@ -169,8 +174,8 @@
        (emit (if rec? 'trap 'tap) num-args)))
 
     ((call)
-     (compile-expr block tcx (cadddr bind))
      (emit 'ldf >next)
+     (compile-expr block tcx (cadddr bind))
      (compile-expr block tcx (caddr bind))
      (emit 'tap (+ 1 (expr-arity (cadddr bind)))))
 
@@ -188,3 +193,14 @@
     (dump-costs tcx)
     (compile-toplevel main tcx tl)
     (for-each display (block->strings main #t))))
+
+(define (xclip-toplevel tl)
+  (let ((main (new-block))
+	(tcx (new-tcx '((*initial-world* *ghost-programs*)))))
+    (check-toplevel tcx tl)
+    (dump-costs tcx)
+    (compile-toplevel main tcx tl)
+    (let* ((text (block->strings main))
+           (xclip (cadr (process "xclip -i"))))
+      (for-each (lambda (l) (display l xclip)) text)
+      (close-output-port xclip))))
