@@ -221,7 +221,7 @@
 
    ((and (eq? (car exp) 'lambda) (= (length exp) 3))
     (check-namelist (cadr exp))
-    (check-stmt tcx #f (caddr exp))
+    (check-stmt (tcx-nest tcx (cadr exp)) #f (caddr exp))
     '(lambda))
 
    ((and (eq? (car exp) 'class) (= (length exp) 4))

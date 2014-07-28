@@ -177,5 +177,6 @@
   (let ((main (new-block))
 	(tcx (new-tcx env)))
     (check-toplevel tcx tl)
+    (printf "; costs = ~a~n" (tcx-costs tcx))
     (compile-toplevel main tcx tl)
     (for-each display (block->strings main #t))))
