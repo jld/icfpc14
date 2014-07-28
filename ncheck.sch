@@ -320,5 +320,5 @@
 
 
 (define (check-toplevel tcx tl)
-  (check-stmt tcx tl #f))
+  (check-stmt tcx #f tl))
 

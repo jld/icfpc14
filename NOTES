@@ -113,6 +113,8 @@ Inference seems like it ought to happen in the expander, but:
 * Now we're running check multiple times, and contemplating unrolling.  No.
 * Memoize with an eq-hash?
 ** Make your code faster with this one weird trick!  GC researchers hate him!
+* And by "inference" I mean actually that makes no sense.
+* But I might still want to memoize.
 
 The type checking context, also, mutably:
 * map from class names to arg/ret lb/ub
