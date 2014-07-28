@@ -187,7 +187,9 @@
 (define (compile-toplevel block tcx tl)
   (compile-stmt block tcx tl))
 
-(define (dump-toplevel tl (env '()))
+(define usual-toplevel-env '((*initial-world* *ghost-programs*)))
+
+(define (dump-toplevel tl (env usual-toplevel-env))
   (let ((main (new-block))
 	(tcx (new-tcx env)))
     (check-toplevel tcx tl)
@@ -197,7 +199,7 @@
 
 (define (xclip-toplevel tl)
   (let ((main (new-block))
-	(tcx (new-tcx '((*initial-world* *ghost-programs*)))))
+	(tcx (new-tcx usual-toplevel-env)))
     (check-toplevel tcx tl)
     (dump-costs tcx)
     (compile-toplevel main tcx tl)
