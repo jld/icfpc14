@@ -60,6 +60,19 @@
 
   (when join? (emit 'join)))
 
+(define (expr-arity exp)
+  (cond
+   ((or (integer? exp)
+	(symbol? exp)
+	(memq (car exp) '(class lambda))) 1)
+   ((eq? (car exp) '&)
+    (for/sum ((exp (cdr exp))) (expr-arity exp)))
+   ((assq (car exp) expr-primops) =>
+    (lambda (opinfo) (length (primop-out opinfo))))
+   ((eq? (car exp) 'set) 0)
+   ((eq? (car exp) 'if)
+    (expr-arity (caddr exp)))))
+
 (define (dump-expr exp (env '()))
   (let ((main (new-block))
 	(tcx (new-tcx env)))
@@ -75,7 +88,7 @@
     ((ret)
      (compile-expr block tcx (cadr stmt))
      (env-access tcx emit 'ld cc-name)
-     (emit 'tap (length (check-expr tcx (cadr stmt))))) ; FIXME: double-traversal
+     (emit 'tap (expr-arity (cadr stmt))))
 
     ((halt)
      (compile-expr block tcx (cadr stmt))
@@ -85,7 +98,7 @@
      (compile-expr block tcx (caddr stmt))
      (env-access tcx emit 'ld cc-name)
      (compile-expr block tcx (cadr stmt))
-     (emit 'tap (+ 1 (length (check-expr tcx (caddr stmt)))))) ; FIXME: double-traversal
+     (emit 'tap (+ 1 (expr-arity (caddr stmt)))))
 
     ((bind)
      (let ((>next (block-fork block))
@@ -149,7 +162,7 @@
      (compile-expr block tcx (cadddr bind))
      (emit 'ldf >next)
      (compile-expr block tcx (caddr bind))
-     (emit 'tap (+ 1 (check-expr (cadddr bind))))) ; FIXME: double-traversal
+     (emit 'tap (+ 1 (expr-arity (cadddr bind)))))
 
     (else
      (error "internal error: unrecognized binding:" bind))))

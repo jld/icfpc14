@@ -130,6 +130,7 @@ TODO, maybe, expansions:
 
 Notes on s/b cost:
 (ret e) => (cost e) 1 kmagic 1
+(halt e) => (cost e) 1
 (goto e e) => (cost e1) (cost e2) amagic 1 (cost v)
 (seq e t) => (cost e) (cost t)
 (bind b t) => (cost b) (cost t)

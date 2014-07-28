@@ -185,7 +185,11 @@
 	   (altern (cadddr exp)))
        (unless (subtypes? (recur predic) '(int))
 	 (error "condition guard is not an int in" exp))
-       (types-lub (recur conseq) (recur altern))))
+       (let ((tconseq (recur conseq))
+	     (taltern (recur altern)))
+	 (unless (= (length tconseq) (length taltern))
+	   (error "arity mismatch in conditional:" exp))
+	 (types-lub tconseq taltern))))
 
    ((and (eq? (car exp) 'lambda) (= (length exp) 3))
     (check-namelist (cadr exp))
@@ -211,28 +215,6 @@
 	(error "mutation type mismatch:" vtys exp))
       '()))
 
-   (else
-    (error "unrecognized expression:" exp))))
-
-(define (expr-cost exp (join? #f))
-  (cond
-   ((or (integer? exp)
-	(symbol? exp)
-	(memq (car exp) '(class lambda))) 1)
-   ((eq? (car exp) '&)
-    (for/sum ((exp (cdr exp))) (expr-cost exp)))
-   ((assq (car exp) expr-primops) =>
-    (lambda (opinfo)
-      (+ (expr-cost (cadr exp))
-	 (length (primop-insns opinfo)))))
-   ((eq? (car exp) 'set)
-    (+ (length (cadr exp))
-       (expr-cost (caddr exp))))
-   ((eq? (car exp) 'if)
-    (+ (if join? 1 2)
-       (expr-cost (cadr exp))
-       (max (expr-cost (caddr exp) #t)
-	    (expr-cost (cadddr exp) #t))))
    (else
     (error "unrecognized expression:" exp))))
 
