@@ -76,7 +76,7 @@
 
      (var (: lmx int) lmx0 (: lmy int) lmy0 (: here cell) here0)
      )
-   '((var (wmap lman ghos fruit) (untuple 4 *world*))
+   `((var (wmap lman ghos fruit) (untuple 4 *world*))
      (var (lmvit lmloc lmdir lmliv lmsc) (untuple 5 lman))
      (var ((: new-lmx int) (: new-lmy int)) (unsafe (untuple 2 lmloc)))
 
@@ -90,10 +90,11 @@
 	(else
 	 (call ((: up cell) (: rt cell) (: dn cell) (: lf cell)) here)
 	 (call (: upthere cell) find-it basex (- basey 1) up thatx thaty (- n 1))
+	 ; This should be generated.
 	 (if (thing? upthere) (ret upthere)
 	     (begin
 	       (call (: rtthere cell) find-it (+ basex 1) basey rt thatx thaty (- n 1))
-	       (if (thing? rtthere) (ret upthere)
+	       (if (thing? rtthere) (ret rtthere)
 		   (begin
 		     (call (: dnthere cell) find-it basex (+ basey 1) dn thatx thaty (- n 1))
 		     (if (thing? dnthere) (ret dnthere)
@@ -102,14 +103,43 @@
      (when (and (= new-lmx lmx0) (= new-lmy lmy0))
        (set (lmx lmy here) lmx0 lmy0 here0))
 
-     (call (: new-here cell) find-it lmx lmy here new-lmx new-lmy 1)
+     (call (: new-here cell) find-it lmx lmy here new-lmx new-lmy 2)
      (set (lmx lmy here) new-lmx new-lmy new-here)
 
-     (debug (cons (cons lmx lmy) here))
+     ; (debug (cons (cons lmx lmy) here))
 
-     (call (_u _r _d _l _v (: set-here cell-poke)) here)
+     (call ((: up cell) (: rt cell) (: dn cell) (: lf cell) _v (: set-here cell-poke)) here)
      (call () set-here 1)
      
+     (var bestdir lmdir (: bestn int) -1)
+
+     (rec ((: dfs-up dfs) (: dfs-rt dfs) (: dfs-dn dfs) (: dfs-lf dfs))
+	  (& ,@(for/list ((fn '(dfs-up dfs-rt dfs-dn dfs-lf)) (i (in-naturals)))
+		 `(class dfs ((: loc cell) odir (: n int))
+		    (when (and (thing? loc) n)
+		      (call ((: up cell) (: rt cell) (: dn cell) (: lf cell) (: v int)) loc)
+		      (var (: faken int) (* n (if (< v 4) (- v 1) 0)))
+		      (if (> faken bestn)
+			  (ret (set (bestdir bestn) odir faken))
+			  (begin
+			    ,@(for/list ((fn2 '(dfs-up dfs-rt dfs-dn dfs-lf))
+					 (no '(dfs-dn dfs-lf dfs-up dfs-rt))
+					 (dir '(up rt dn lf))
+					 #:unless (eq? fn no))
+				;; Last one should be a goto.
+				;; Sure is a shame we're not in a language where that's automatic
+				;; anymore....  (Oops.)
+				`(call () ,fn2 ,dir odir (- n 1))))))))))
+
+     ; Wat.
+     (var (: lmdir int) (unsafe lmdir))
+     (when (<= lmdir 0) (call () dfs-up up 0 10))
+     (when (<= lmdir 1) (call () dfs-rt rt 1 10))
+     (when (<= lmdir 2) (call () dfs-dn dn 2 10))
+     (when (<= lmdir 3) (call () dfs-lf lf 3 10))
+     (when (> lmdir 0) (call () dfs-up up 0 10))
+     (when (> lmdir 1) (call () dfs-rt rt 1 10))
+     (when (> lmdir 2) (call () dfs-dn dn 2 10))
      )
-   3
+   'bestdir
    ))
