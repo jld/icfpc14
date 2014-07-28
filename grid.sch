@@ -63,22 +63,33 @@
 		 (call () up-link ,dir-dn this-cell)))
 	     (goto handle-line (+ x 1) y
 		   (cdr thisright) this-cell this-link
-		   (cdr upright-xcells) (cons (cons this-cell this-link) thisleft-xcells)))))
+		   (if (null? upright-xcells) 0 (cdr upright-xcells))
+		   (cons (cons this-cell this-link) thisleft-xcells)))))
 
      (defun handle-block ((: y int) thisdown up-xcells)
        ,8bit
        (unless (null? thisdown)
-	 (call this-xcells handle-line 0 y (car thisdown) 0 0 0 0)
+	 (call this-xcells handle-line 0 y (car thisdown) 0 0 up-xcells 0)
 	 (goto handle-block (+ y 1) (cdr thisdown) this-xcells)))
 
-     (debug here))
+     (call () handle-block 0 wmap0 0)
 
+     (defun splat ((: n int) (: c cell))
+       (if (=0 n) (ret)
+	   (if (null? c) (begin (debug 0))
+	       (begin
+		 (debug 1111111)
+		 (call ((: up cell) (: rt cell) (: dn cell) (: lf cell) val) c)
+		 (debug val)
+		 (call () splat (- n 1) up)
+		 (call () splat (- n 1) rt)
+		 (call () splat (- n 1) dn)
+		 (call () splat (- n 1) lf)
+		 (debug 2222222)))))
+     (call () splat 4 here)
+
+     )
    '() ;; later...
 
    3
    ))
-      
-	    
-		
-		
-	    

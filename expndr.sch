@@ -126,6 +126,18 @@
       ((<>) (expand `(=0 (= ,@(cdr form)))))
       ((thing?) (expand `(=0 (null? ,@(cdr form)))))
 
+      ;; Control-ish things
+      ((block)
+       (let ((vars (cadr form))
+	     (body (cddr form))
+	     (cname (gensym 'block)))
+	 ;; This is inefficient...
+	 (expand `(call ,vars (class ,cname () ,@body)))))
+      ((when)
+       (expand `(block () (if ,(cadr form) (begin ,@(cddr form)) (ret)))))
+      ((unless)
+       (expand `(when (=0 ,(cadr form)) ,@(cddr form))))
+
       (else
        (error "unexpanded form" form))
      ))))
